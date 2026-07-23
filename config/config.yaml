@@ -1,0 +1,135 @@
+# ============================================================
+# BugBountyAgent - Master Configuration
+# ============================================================
+
+# --- General ---
+general:
+  app_name: "BugBountyAgent"
+  version: "0.1.0"
+  debug: true
+  log_level: "INFO"
+
+# --- Agent ---
+agent:
+  mode: "hybrid"           # watch, full, hybrid, manual
+  auto_approve: false      # NEVER auto-approve for safety
+  require_confirmation: true
+
+# --- System ---
+system:
+  data_dir: "./data"
+  logs_dir: "./logs"
+  reports_dir: "./data/reports"
+  findings_dir: "./data/findings"
+  chains_dir: "./data/chains"
+  patterns_dir: "./data/patterns"
+  screenshots_dir: "./data/screenshots"
+  tool_outputs_dir: "./data/tool_outputs"
+  temp_dir: "./temp"
+  state_file: "./data/state.json"
+  log_level: "INFO"
+  command_whitelist: []
+  command_blacklist:
+    - "rm -rf /"
+    - "dd"
+    - "mkfs"
+    - "shutdown"
+    - "reboot"
+  command_timeout: 300
+  working_dir: "."
+
+# --- Browser ---
+browser:
+  headless: false
+  proxy: null
+
+# --- Scanner ---
+scanner:
+  timeout: 300
+  severity_filter:
+    - "low"
+    - "medium"
+    - "high"
+    - "critical"
+
+# --- Learning ---
+learning:
+  enabled: true
+  confidence_threshold: 0.7
+  knowledge_path: "./data/knowledge/knowledge.json"
+
+# --- Database ---
+database:
+  path: "./data/state.db"
+
+# --- Storage ---
+storage:
+  max_total_gb: 50
+  auto_cleanup: true
+  retention:
+    logs: 30
+    reports: 60
+    screenshots: 30
+    findings: 365
+    chains: 180
+    patterns: 180
+    tool_outputs: 30
+
+# --- Dashboard ---
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 5000
+  debug: true
+
+# --- Network ---
+network:
+  timeout: 10
+
+# --- Auth ---
+auth:
+  secret_key: "dev-secret-key-change-me"
+  token_expiry: 3600
+
+# --- Tools ---
+tools:
+  nmap:
+    enabled: true
+    path: "/usr/bin/nmap"
+    args: "-sV -sC -O -T4"
+  nuclei:
+    enabled: true
+    path: "/usr/local/bin/nuclei"
+    args: "-severity low,medium,high,critical"
+  subfinder:
+    enabled: true
+    path: "/usr/local/bin/subfinder"
+    args: "-silent"
+  amass:
+    enabled: true
+    path: "/usr/local/bin/amass"
+    args: "-passive"
+  ffuf:
+    enabled: true
+    path: "/usr/local/bin/ffuf"
+    wordlist: "/usr/share/wordlists/dirb/common.txt"
+    threads: 40
+  sqlmap:
+    enabled: true
+    path: "/usr/local/bin/sqlmap"
+    args: "--batch --random-agent"
+  nikto:
+    enabled: true
+    path: "/usr/local/bin/nikto"
+    args: "-ssl -h"
+  wpscan:
+    enabled: true
+    path: "/usr/local/bin/wpscan"
+    args: "--rua -e vp,vt,tt"
+  burp:
+    enabled: false
+    path: "/usr/local/bin/burpsuite"
+    port: 8080
+  metasploit:
+    enabled: false
+    path: "/usr/bin/msfconsole"
