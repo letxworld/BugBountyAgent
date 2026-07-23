@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Targets — BugBountyAgent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <span class="logo">🐞</span>
+                <span class="brand-text">BugBountyAgent</span>
+                <span class="badge-version">v0.1</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/targets" class="nav-item active" data-page="targets">
+                    <span class="nav-icon">🎯</span>
+                    <span>Targets</span>
+                </a>
+                <a href="/findings" class="nav-item" data-page="findings">
+                    <span class="nav-icon">🔍</span>
+                    <span>Findings</span>
+                </a>
+                <a href="/chains" class="nav-item" data-page="chains">
+                    <span class="nav-icon">🔗</span>
+                    <span>Chains</span>
+                </a>
+                <a href="#" class="nav-item" data-page="scans">
+                    <span class="nav-icon">⚡</span>
+                    <span>Scans</span>
+                </a>
+                <a href="#" class="nav-item" data-page="tools">
+                    <span class="nav-icon">🔧</span>
+                    <span>Tools</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-indicator" id="connectionStatus">
+                    <span class="status-dot connected"></span>
+                    <span class="status-text">Connected</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle">☰</button>
+                    <h1>🎯 Targets</h1>
+                    <span class="subtitle">Manage your bug bounty targets</span>
+                </div>
+                <div class="header-right">
+                    <button class="btn btn-secondary btn-sm" onclick="refreshTargets()">🔄 Refresh</button>
+                    <button class="btn btn-primary btn-sm" onclick="showAddTarget()">➕ Add Target</button>
+                </div>
+            </header>
+
+            <!-- Targets Table -->
+            <section class="targets-section">
+                <div class="targets-toolbar">
+                    <div class="search-box">
+                        <input type="text" id="searchTargets" placeholder="Search targets..." onkeyup="filterTargets()">
+                    </div>
+                    <div class="filter-group">
+                        <select id="statusFilter" onchange="filterTargets()">
+                            <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="scanning">Scanning</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="targets-table-container">
+                    <table class="targets-table" id="targetsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>URL</th>
+                                <th>Status</th>
+                                <th>Findings</th>
+                                <th>Added</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="targetsTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No targets found. Add your first target!</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add Target Modal -->
+    <div class="modal-overlay" id="addTargetModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add Target</h3>
+                <button class="modal-close" onclick="closeAddTarget()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="targetUrl">Target URL</label>
+                    <input type="text" id="targetUrl" placeholder="https://example.com" />
+                </div>
+                <div class="form-group">
+                    <label for="targetScope">Scope (comma separated)</label>
+                    <input type="text" id="targetScope" placeholder="*.example.com" />
+                </div>
+                <div class="form-group">
+                    <label for="targetExclude">Exclude (comma separated)</label>
+                    <input type="text" id="targetExclude" placeholder="*.dev.example.com" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAddTarget()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveTarget()">Add Target</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script>
+        const socket = io();
+        let targets = [];
+
+        // Connection
+        socket.on('connect', () => {
+            updateConnectionStatus('connected');
+            refreshTargets();
+        });
+
+        socket.on('disconnect', () => {
+            updateConnectionStatus('disconnected');
+        });
+
+        socket.on('targets_updated', (data) => {
+            targets = data.targets || [];
+            renderTargets();
+        });
+
+        socket.on('target_added', (data) => {
+            showToast(`✅ Target added: ${data.url}`, 'success');
+            refreshTargets();
+        });
+
+        socket.on('target_removed', (data) => {
+            showToast(`🗑️ Target removed`, 'info');
+            refreshTargets();
+        });
+
+        socket.on('error', (data) => {
+            showToast(`❌ Error: ${data.message}`, 'error');
+        });
+
+        // Functions
+        function updateConnectionStatus(status) {
+            const dot = document.querySelector('#connectionStatus .status-dot');
+            const text = document.querySelector('#connectionStatus .status-text');
+            dot.className = 'status-dot ' + status;
+            text.textContent = status === 'connected' ? 'Connected' : 'Disconnected';
+        }
+
+        function refreshTargets() {
+            socket.emit('refresh_targets');
+        }
+
+        function renderTargets() {
+            const tbody = document.getElementById('targetsTableBody');
+            const search = document.getElementById('searchTargets').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            let filtered = targets;
+            if (search) {
+                filtered = filtered.filter(t => t.url.toLowerCase().includes(search));
+            }
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(t => t.status === statusFilter);
+            }
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No targets found</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(t => `
+                <tr>
+                    <td><code>${t.id}</code></td>
+                    <td><a href="${t.url}" target="_blank">${t.url}</a></td>
+                    <td><span class="status-badge status-${t.status}">${t.status}</span></td>
+                    <td>${t.findings || 0}</td>
+                    <td>${t.added || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="startScan('${t.id}')">Scan</button>
+                        <button class="btn btn-sm btn-danger" onclick="removeTarget('${t.id}')">Remove</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterTargets() {
+            renderTargets();
+        }
+
+        function showAddTarget() {
+            document.getElementById('addTargetModal').classList.add('active');
+        }
+
+        function closeAddTarget() {
+            document.getElementById('addTargetModal').classList.remove('active');
+        }
+
+        function saveTarget() {
+            const url = document.getElementById('targetUrl').value.trim();
+            if (!url) {
+                showToast('⚠️ Please enter a URL', 'warning');
+                return;
+            }
+            socket.emit('add_target', {url: url});
+            closeAddTarget();
+            document.getElementById('targetUrl').value = '';
+        }
+
+        function removeTarget(targetId) {
+            if (confirm('Remove this target?')) {
+                socket.emit('remove_target', {target_id: targetId});
+            }
+        }
+
+        function startScan(targetId) {
+            socket.emit('start_scan', {target_id: targetId, type: 'full'});
+            showToast(`🚀 Scan started on target ${targetId}`, 'info');
+        }
+
+        function showToast(message, type) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Menu toggle for mobile
+        document.getElementById('menuToggle').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+
+        // Close modal on overlay click
+        document.getElementById('addTargetModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeAddTarget();
+        });
+
+        // Auto-refresh every 10 seconds
+        setInterval(refreshTargets, 10000);
+    </script>
+</body>
+</html>
