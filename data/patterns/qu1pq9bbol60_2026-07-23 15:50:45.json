@@ -1,0 +1,15 @@
+{
+  "id": "qu1pq9bbol60",
+  "signature": "62b60209a3485e22",
+  "title": "Sensitive Information Disclosure: password",
+  "severity": "high",
+  "type": "disclosure",
+  "indicators": [
+    "info_disclosure"
+  ],
+  "confidence": 0.72,
+  "occurrences": 2,
+  "first_seen": "2026-07-23 15:36:35",
+  "last_seen": "2026-07-23 15:50:45",
+  "source": "custom"
+}

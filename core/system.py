@@ -25,7 +25,8 @@ from .browser import BrowserController
 from .terminal import TerminalController
 from .filesystem import FileSystemController
 from .process import ProcessController
-from .logging import log_info, log_error, log_warning, log_debug, get_timestamp
+from .logging import log_info, log_error, log_warning, log_debug
+from .utils import get_timestamp
 
 
 class SystemController:
@@ -69,10 +70,6 @@ class SystemController:
         # Connect browser
         if not self.browser.connect():
             log_warning("Browser connection failed")
-        
-        # Check terminal
-        if not self.terminal:
-            log_warning("Terminal not available")
         
         self.is_connected = True
         log_info("✅ System connected")
@@ -424,21 +421,13 @@ class SystemController:
         """Get complete system information."""
         info = {
             'os': os.name,
-            'hostname': os.uname().nodename if hasattr(os, 'uname') else 'unknown',
             'working_dir': os.getcwd(),
             'python_version': sys.version,
-            'browser_connected': self.browser.is_connected,
+            'browser_connected': self.browser.is_connected if hasattr(self.browser, 'is_connected') else False,
             'burp_running': self.burp_is_running(),
             'processes': self.get_running_processes(),
             'timestamp': get_timestamp()
         }
-        
-        # Check Python packages
-        try:
-            import pkg_resources
-            info['packages'] = [p.key for p in pkg_resources.working_set][:20]
-        except:
-            pass
         
         return info
     
@@ -460,3 +449,11 @@ class SystemController:
             'social_engineering': "❌ Cannot perform social engineering attacks",
             'legal_authorization': "⚠️ Requires user to have explicit authorization to test targets"
         }
+    
+    # ============================================================
+    # 10. Cleanup
+    # ============================================================
+    
+    def cleanup_old_data(self, days: int = 30) -> Dict[str, int]:
+        """Clean up old data."""
+        return self.filesystem.cleanup_old_files(days)

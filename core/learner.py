@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 
 from .config import Config
 from .filesystem import FileSystemController
-from .logging import log_info, log_error, log_warning, log_debug, get_timestamp, generate_id
+from .logging import log_info, log_error, log_warning, log_debug
+from .utils import get_timestamp, generate_id
 
 
 class Learner:

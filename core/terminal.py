@@ -80,9 +80,14 @@ class TerminalController:
             if env:
                 full_env.update(env)
             
+            # Use bash for better shell compatibility
+            if shell:
+                cmd = ['/bin/bash', '-c', command]
+            else:
+                cmd = command if isinstance(command, list) else [command]
+            
             result = subprocess.run(
-                command,
-                shell=shell,
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout or self.timeout,
@@ -98,6 +103,8 @@ class TerminalController:
                 log_debug(f"✅ Command succeeded: {command[:50]}...")
             else:
                 log_warning(f"⚠️ Command failed: {command[:50]}... (code {result.returncode})")
+                if result.stderr:
+                    log_debug(f"   Error: {result.stderr[:200]}")
             
             return CommandResult(
                 command=command,
@@ -130,16 +137,7 @@ class TerminalController:
             )
     
     def run_background(self, command: str, env: Optional[Dict] = None) -> Optional[subprocess.Popen]:
-        """
-        Run a command in the background.
-        
-        Args:
-            command: Command to run
-            env: Environment variables
-            
-        Returns:
-            Optional[subprocess.Popen]: Process object
-        """
+        """Run a command in the background."""
         if not self._is_command_allowed(command):
             log_warning(f"🚫 Command blocked: {command}")
             return None
@@ -170,15 +168,7 @@ class TerminalController:
     # ============================================================
     
     def install_tool(self, tool_name: str) -> bool:
-        """
-        Install a security tool.
-        
-        Args:
-            tool_name: Name of the tool
-            
-        Returns:
-            bool: Success status
-        """
+        """Install a security tool."""
         if self.is_tool_installed(tool_name):
             log_info(f"✅ {tool_name} already installed")
             return True
@@ -186,15 +176,14 @@ class TerminalController:
         log_info(f"📦 Installing: {tool_name}")
         
         install_commands = {
-            'nmap': 'sudo apt-get install -y nmap',
-            'nuclei': 'go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest',
-            'subfinder': 'go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest',
-            'amass': 'go install -v github.com/OWASP/Amass/v3/...@master',
-            'ffuf': 'go install -v github.com/ffuf/ffuf@latest',
-            'sqlmap': 'sudo apt-get install -y sqlmap',
-            'nikto': 'sudo apt-get install -y nikto',
-            'wpscan': 'sudo gem install wpscan',
-            'metasploit': 'curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall && chmod 755 msfinstall && ./msfinstall',
+            'nmap': 'sudo apt-get install -y nmap 2>/dev/null || brew install nmap 2>/dev/null || echo "⚠️ Please install nmap manually"',
+            'nuclei': 'go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest 2>/dev/null || curl -s https://raw.githubusercontent.com/projectdiscovery/nuclei/main/install.sh | bash 2>/dev/null || echo "⚠️ Please install nuclei manually"',
+            'subfinder': 'go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest 2>/dev/null || echo "⚠️ Please install subfinder manually"',
+            'amass': 'go install -v github.com/OWASP/Amass/v3/...@master 2>/dev/null || sudo apt-get install -y amass 2>/dev/null || echo "⚠️ Please install amass manually"',
+            'ffuf': 'go install -v github.com/ffuf/ffuf@latest 2>/dev/null || echo "⚠️ Please install ffuf manually"',
+            'sqlmap': 'sudo apt-get install -y sqlmap 2>/dev/null || brew install sqlmap 2>/dev/null || echo "⚠️ Please install sqlmap manually"',
+            'nikto': 'sudo apt-get install -y nikto 2>/dev/null || brew install nikto 2>/dev/null || echo "⚠️ Please install nikto manually"',
+            'wpscan': 'sudo gem install wpscan 2>/dev/null || echo "⚠️ Please install wpscan manually"',
         }
         
         if tool_name not in install_commands:
@@ -212,64 +201,22 @@ class TerminalController:
         """Get the path of a tool."""
         return shutil.which(tool_name)
     
-    # ============================================================
-    # File Operations via Terminal
-    # ============================================================
-    
-    def create_directory(self, path: str) -> bool:
-        """Create a directory."""
-        result = self.run(f"mkdir -p {path}")
-        return result.success
-    
-    def copy_file(self, source: str, dest: str) -> bool:
-        """Copy a file."""
-        result = self.run(f"cp {source} {dest}")
-        return result.success
-    
-    def move_file(self, source: str, dest: str) -> bool:
-        """Move a file."""
-        result = self.run(f"mv {source} {dest}")
-        return result.success
-    
-    def remove_file(self, path: str) -> bool:
-        """Remove a file."""
-        result = self.run(f"rm -f {path}")
-        return result.success
-    
-    def list_directory(self, path: str = '.') -> List[str]:
-        """List directory contents."""
-        result = self.run(f"ls -la {path}")
-        if result.success:
-            return result.stdout.strip().split('\n')
-        return []
-    
-    # ============================================================
-    # Security
-    # ============================================================
-    
     def _is_command_allowed(self, command: str) -> bool:
         """Check if a command is allowed by security policy."""
         command_lower = command.lower()
         
-        # Check blacklist
         for banned in self.blacklist:
             if banned in command_lower:
                 return False
         
-        # If whitelist is empty, allow all (except blacklisted)
         if not self.whitelist:
             return True
         
-        # Check whitelist
         for allowed in self.whitelist:
             if allowed in command_lower:
                 return True
         
         return False
-    
-    # ============================================================
-    # System Information
-    # ============================================================
     
     def get_system_info(self) -> Dict[str, Any]:
         """Get system information."""
@@ -279,12 +226,10 @@ class TerminalController:
             'path': os.environ.get('PATH', '')
         }
         
-        # Check Python version
         result = self.run("python3 --version")
         if result.success:
             info['python'] = result.stdout.strip()
         
-        # Check system
         result = self.run("uname -a")
         if result.success:
             info['system'] = result.stdout.strip()

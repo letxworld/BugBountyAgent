@@ -1,0 +1,13 @@
+{
+  "total_findings": 23,
+  "severity_counts": {
+    "medium": 21,
+    "high": 2
+  },
+  "type_counts": {
+    "misconfig": 16,
+    "xss": 5,
+    "disclosure": 2
+  },
+  "last_learning": "2026-07-23 16:02:28"
+}

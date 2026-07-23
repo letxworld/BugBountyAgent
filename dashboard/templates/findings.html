@@ -33,18 +33,6 @@
                     <span class="nav-icon">🔗</span>
                     <span>Chains</span>
                 </a>
-                <a href="#" class="nav-item" data-page="scans">
-                    <span class="nav-icon">⚡</span>
-                    <span>Scans</span>
-                </a>
-                <a href="#" class="nav-item" data-page="tools">
-                    <span class="nav-icon">🔧</span>
-                    <span>Tools</span>
-                </a>
-                <a href="#" class="nav-item" data-page="settings">
-                    <span class="nav-icon">⚙️</span>
-                    <span>Settings</span>
-                </a>
             </nav>
             <div class="sidebar-footer">
                 <div class="status-indicator" id="connectionStatus">
@@ -68,7 +56,7 @@
             </header>
 
             <!-- Statistics -->
-            <section class="stats-grid" id="statsGrid">
+            <section class="stats-grid" style="margin-bottom:20px;">
                 <div class="stat-card">
                     <div class="stat-icon">📊</div>
                     <div class="stat-info">
@@ -97,39 +85,10 @@
                         <span class="stat-label">Medium</span>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon">🔵</div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statLow">0</span>
-                        <span class="stat-label">Low</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">ℹ️</div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statInfo">0</span>
-                        <span class="stat-label">Info</span>
-                    </div>
-                </div>
             </section>
 
             <!-- Findings Table -->
             <section class="findings-section" style="flex:1; display:flex; flex-direction:column;">
-                <div class="findings-toolbar">
-                    <div class="search-box">
-                        <input type="text" id="searchFindings" placeholder="Search findings..." onkeyup="filterFindings()">
-                    </div>
-                    <div class="filter-group">
-                        <select id="severityFilter" onchange="filterFindings()">
-                            <option value="all">All Severity</option>
-                            <option value="critical">Critical</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                            <option value="info">Info</option>
-                        </select>
-                    </div>
-                </div>
                 <div class="findings-table-container" style="flex:1; overflow-y:auto;">
                     <table class="findings-table" id="findingsTable">
                         <thead>
@@ -137,15 +96,13 @@
                                 <th>Severity</th>
                                 <th>Title</th>
                                 <th>Target</th>
-                                <th>Type</th>
                                 <th>CVE</th>
                                 <th>Time</th>
-                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="findingsTableBody">
                             <tr>
-                                <td colspan="7" class="text-center text-muted">No findings yet</td>
+                                <td colspan="5" class="text-center text-muted">No findings yet</td>
                             </tr>
                         </tbody>
                     </table>
@@ -156,14 +113,12 @@
 
     <!-- Finding Detail Modal -->
     <div class="modal-overlay" id="findingDetailModal">
-        <div class="modal" style="max-width: 700px;">
+        <div class="modal" style="max-width:700px;">
             <div class="modal-header">
                 <h3 id="findingDetailTitle">Finding Details</h3>
                 <button class="modal-close" onclick="closeFindingDetail()">✕</button>
             </div>
-            <div class="modal-body" id="findingDetailBody">
-                <div class="finding-detail-content"></div>
-            </div>
+            <div class="modal-body" id="findingDetailBody"></div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeFindingDetail()">Close</button>
             </div>
@@ -172,160 +127,6 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script>
-        const socket = io();
-        let findings = [];
-
-        socket.on('connect', () => {
-            updateConnectionStatus('connected');
-            refreshFindings();
-        });
-
-        socket.on('disconnect', () => {
-            updateConnectionStatus('disconnected');
-        });
-
-        socket.on('findings_update', (data) => {
-            findings = data.findings || [];
-            renderFindings();
-            updateStats();
-        });
-
-        socket.on('finding_details', (data) => {
-            showFindingDetail(data);
-        });
-
-        socket.on('error', (data) => {
-            showToast(`❌ Error: ${data.message}`, 'error');
-        });
-
-        function updateConnectionStatus(status) {
-            const dot = document.querySelector('#connectionStatus .status-dot');
-            const text = document.querySelector('#connectionStatus .status-text');
-            dot.className = 'status-dot ' + status;
-            text.textContent = status === 'connected' ? 'Connected' : 'Disconnected';
-        }
-
-        function refreshFindings() {
-            socket.emit('get_findings', {});
-        }
-
-        function updateStats() {
-            const stats = {total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0};
-            findings.forEach(f => {
-                stats.total++;
-                const sev = f.severity || 'info';
-                if (stats[sev] !== undefined) stats[sev]++;
-            });
-            document.getElementById('statTotal').textContent = stats.total;
-            document.getElementById('statCritical').textContent = stats.critical;
-            document.getElementById('statHigh').textContent = stats.high;
-            document.getElementById('statMedium').textContent = stats.medium;
-            document.getElementById('statLow').textContent = stats.low;
-            document.getElementById('statInfo').textContent = stats.info;
-        }
-
-        function renderFindings() {
-            const tbody = document.getElementById('findingsTableBody');
-            const search = document.getElementById('searchFindings').value.toLowerCase();
-            const severityFilter = document.getElementById('severityFilter').value;
-
-            let filtered = findings;
-            if (search) {
-                filtered = filtered.filter(f => 
-                    (f.title || '').toLowerCase().includes(search) ||
-                    (f.target || '').toLowerCase().includes(search)
-                );
-            }
-            if (severityFilter !== 'all') {
-                filtered = filtered.filter(f => f.severity === severityFilter);
-            }
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No findings found</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = filtered.map(f => `
-                <tr onclick="viewFinding('${f.id}')" style="cursor:pointer;">
-                    <td><span class="severity-badge severity-${f.severity || 'info'}">${f.severity || 'info'}</span></td>
-                    <td>${f.title || 'Unknown'}</td>
-                    <td>${f.target || 'N/A'}</td>
-                    <td>${f.type || 'Unknown'}</td>
-                    <td>${f.cve_id || '-'}</td>
-                    <td>${f.timestamp || 'N/A'}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();viewFinding('${f.id}')">View</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function filterFindings() {
-            renderFindings();
-        }
-
-        function viewFinding(findingId) {
-            socket.emit('get_finding_details', {finding_id: findingId});
-        }
-
-        function showFindingDetail(data) {
-            document.getElementById('findingDetailTitle').textContent = data.title || 'Finding Details';
-            const body = document.querySelector('#findingDetailBody .finding-detail-content');
-            body.innerHTML = `
-                <div class="finding-detail">
-                    <p><strong>ID:</strong> ${data.id}</p>
-                    <p><strong>Severity:</strong> <span class="severity-badge severity-${data.severity || 'info'}">${data.severity || 'info'}</span></p>
-                    <p><strong>Target:</strong> ${data.target || 'N/A'}</p>
-                    <p><strong>Type:</strong> ${data.type || 'Unknown'}</p>
-                    <p><strong>Description:</strong> ${data.description || 'No description'}</p>
-                    ${data.cve_id ? `<p><strong>CVE:</strong> ${data.cve_id}</p>` : ''}
-                    ${data.cvss_score ? `<p><strong>CVSS:</strong> ${data.cvss_score}</p>` : ''}
-                    ${data.remediation ? `<p><strong>Remediation:</strong> ${data.remediation}</p>` : ''}
-                    ${data.reproduction_steps ? `<p><strong>Reproduction Steps:</strong><br/>${data.reproduction_steps}</p>` : ''}
-                    <p><strong>Found:</strong> ${data.timestamp || 'N/A'}</p>
-                </div>
-            `;
-            document.getElementById('findingDetailModal').classList.add('active');
-        }
-
-        function closeFindingDetail() {
-            document.getElementById('findingDetailModal').classList.remove('active');
-        }
-
-        function exportFindings() {
-            const dataStr = JSON.stringify(findings, null, 2);
-            const blob = new Blob([dataStr], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `findings_${new Date().toISOString().slice(0,10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('📤 Findings exported', 'success');
-        }
-
-        function showToast(message, type) {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
-        }
-
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-
-        document.getElementById('findingDetailModal').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) closeFindingDetail();
-        });
-
-        setInterval(refreshFindings, 15000);
-    </script>
+    <script src="/static/js/dashboard.js"></script>
 </body>
 </html>

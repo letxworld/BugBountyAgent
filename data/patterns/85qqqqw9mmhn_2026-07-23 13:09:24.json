@@ -1,0 +1,13 @@
+{
+  "id": "85qqqqw9mmhn",
+  "signature": "4ac738d6893ace80",
+  "title": "Missing Security Header: Referrer-Policy",
+  "severity": "medium",
+  "type": "misconfig",
+  "indicators": [],
+  "confidence": 0.7,
+  "occurrences": 1,
+  "first_seen": "2026-07-23 13:09:24",
+  "last_seen": "2026-07-23 13:09:24",
+  "source": "custom"
+}

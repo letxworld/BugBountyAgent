@@ -1,0 +1,13 @@
+{
+  "id": "97u7qv920u9t",
+  "signature": "3b38d20208c7f766",
+  "title": "Missing Security Header: X-XSS-Protection",
+  "severity": "medium",
+  "type": "xss",
+  "indicators": [],
+  "confidence": 0.74,
+  "occurrences": 3,
+  "first_seen": "2026-07-23 13:09:24",
+  "last_seen": "2026-07-23 15:36:35",
+  "source": "custom"
+}

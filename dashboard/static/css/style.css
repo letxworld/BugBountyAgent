@@ -114,7 +114,6 @@ body {
     font-size: 18px;
     font-weight: 700;
     background: linear-gradient(135deg, #3b82f6, #a78bfa);
-    -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 

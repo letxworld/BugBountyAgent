@@ -1,53 +1,28 @@
 """
 BugBountyAgent - Main Agent Orchestrator
 =========================================
-The brain that orchestrates everything:
-- System access (browser, terminal, filesystem)
-- Tool execution (Nmap, Nuclei, Burp, etc.)
-- Vulnerability scanning
-- Self-learning
-- Report generation
+The brain that orchestrates everything.
 """
 
 import os
 import json
 import time
 import threading
+import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Callable
-from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from .config import Config
-from .browser import BrowserController
-from .terminal import TerminalController
-from .filesystem import FileSystemController
-from .process import ProcessController
+from .state import StateManager
+from .system import SystemController
 from .scanner import Scanner
+from .tools import ToolManager
+from .brain import Brain
 from .learner import Learner
 from .reporter import Reporter
 from .utils import get_timestamp, generate_id
-
-
-@dataclass
-class Target:
-    """Target being hunted."""
-    id: str
-    url: str
-    status: str  # pending, scanning, completed, failed
-    added: str
-    findings: List[Dict] = field(default_factory=list)
-    chains: List[Dict] = field(default_factory=list)
-    completed_at: Optional[str] = None
-
-
-@dataclass
-class ScanResult:
-    """Result of a scan."""
-    target_id: str
-    findings: List[Dict]
-    chains: List[Dict]
-    duration: float
-    report_path: Optional[str] = None
+from .logging import log_info, log_error, log_warning, log_debug
 
 
 class BugBountyAgent:
@@ -56,117 +31,127 @@ class BugBountyAgent:
     Controls your system like a human bug bounty hunter.
     """
     
-    def __init__(self, config_path: str = "config.yaml"):
+    def __init__(self, config: Config):
         """Initialize the agent."""
-        self.config = Config(config_path)
-        self.browser = BrowserController(self.config)
-        self.terminal = TerminalController(self.config)
-        self.filesystem = FileSystemController(self.config)
-        self.process = ProcessController(self.config)
-        self.scanner = Scanner(self.config, self.browser, self.terminal)
-        self.learner = Learner(self.config)
-        self.reporter = Reporter(self.config)
+        self.config = config
+        self.state = StateManager(config)
+        self.system = SystemController(config)
+        self.scanner = Scanner(config, self.system.browser, self.system.terminal)
+        self.tools = ToolManager(config)
+        self.brain = Brain(config)
+        self.learner = Learner(config)
+        self.reporter = Reporter(config)
         
-        self.targets: Dict[str, Target] = {}
-        self.scan_results: Dict[str, ScanResult] = {}
-        self.running = False
-        self.scan_threads: Dict[str, threading.Thread] = {}
+        self.targets: Dict[str, Dict] = {}
+        self.scan_results: Dict[str, Dict] = {}
+        self.running_scans: Dict[str, threading.Thread] = {}
+        self._socketio = None
         
         self._load_state()
-        print(f"🤖 BugBountyAgent initialized (mode: {self.config.get('agent.mode', 'hybrid')})")
+        log_info("🤖 BugBountyAgent initialized")
+    
+    def set_socketio(self, socketio_instance):
+        """Set SocketIO instance for real-time updates."""
+        self._socketio = socketio_instance
+    
+    def _emit_log(self, level: str, message: str):
+        """Emit log to dashboard via SocketIO."""
+        if self._socketio:
+            try:
+                self._socketio.emit('log_message', {
+                    'level': level,
+                    'message': message,
+                    'timestamp': get_timestamp()
+                })
+            except:
+                pass
     
     # ============================================================
     # Target Management
     # ============================================================
     
     def add_target(self, url: str) -> str:
-        """
-        Add a target to hunt.
+        """Add a target to hunt."""
+        # Ensure URL has protocol
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
         
-        Args:
-            url: Target URL (e.g., https://example.com)
-            
-        Returns:
-            str: Target ID
-        """
         target_id = generate_id()
-        target = Target(
-            id=target_id,
-            url=url,
-            status='pending',
-            added=get_timestamp()
-        )
+        target = {
+            'id': target_id,
+            'url': url,
+            'status': 'pending',
+            'added': get_timestamp(),
+            'findings': [],
+            'chains': []
+        }
+        
         self.targets[target_id] = target
-        self._save_state()
-        print(f"🎯 Target added: {url} (ID: {target_id})")
+        self.state.save_target(target)
+        
+        log_info(f"🎯 Target added: {url} (ID: {target_id})")
+        self._emit_log('success', f"🎯 Target added: {url}")
         return target_id
     
     def list_targets(self) -> List[Dict]:
         """List all targets."""
-        return [
-            {
-                'id': t.id,
-                'url': t.url,
-                'status': t.status,
-                'findings': len(t.findings),
-                'added': t.added
-            }
-            for t in self.targets.values()
-        ]
+        return list(self.targets.values())
     
     def get_target(self, target_id: str) -> Optional[Dict]:
         """Get target by ID."""
-        target = self.targets.get(target_id)
-        if target:
-            return {
-                'id': target.id,
-                'url': target.url,
-                'status': target.status,
-                'findings': target.findings,
-                'chains': target.chains,
-                'added': target.added,
-                'completed_at': target.completed_at
-            }
-        return None
+        return self.targets.get(target_id)
+    
+    def remove_target(self, target_id: str) -> bool:
+        """Remove a target."""
+        if target_id in self.targets:
+            del self.targets[target_id]
+            self.state.delete_target(target_id)
+            log_info(f"🗑️ Target removed: {target_id}")
+            self._emit_log('info', f"🗑️ Target removed: {target_id}")
+            return True
+        return False
     
     # ============================================================
     # Scan Execution
     # ============================================================
     
     def scan(self, target_id: str, scan_type: str = 'full') -> Optional[str]:
-        """
-        Start a scan on a target.
-        
-        Args:
-            target_id: Target ID
-            scan_type: 'quick', 'full', 'recon'
-            
-        Returns:
-            Optional[str]: Scan ID or None
-        """
+        """Start a scan on a target."""
         target = self.targets.get(target_id)
         if not target:
-            print(f"❌ Target not found: {target_id}")
+            log_error(f"❌ Target not found: {target_id}")
+            self._emit_log('error', f"❌ Target not found: {target_id}")
             return None
         
-        if target.status == 'scanning':
-            print(f"⏳ Target already scanning: {target_id}")
+        if target.get('status') == 'scanning':
+            log_warning(f"⏳ Target already scanning: {target_id}")
+            self._emit_log('warning', f"⏳ Target already scanning: {target_id}")
             return None
         
         scan_id = generate_id()
-        target.status = 'scanning'
-        self._save_state()
+        target['status'] = 'scanning'
+        self.state.save_target(target)
         
-        print(f"🚀 Starting {scan_type} scan on {target.url}")
+        log_info(f"🚀 Starting {scan_type} scan on {target['url']}")
+        self._emit_log('info', f"🚀 Starting {scan_type} scan on {target['url']}")
         
-        # Run scan in background thread
         thread = threading.Thread(
             target=self._run_scan,
             args=(scan_id, target_id, scan_type)
         )
         thread.daemon = True
         thread.start()
-        self.scan_threads[scan_id] = thread
+        self.running_scans[scan_id] = thread
+        
+        scan_record = {
+            'id': scan_id,
+            'target_id': target_id,
+            'scan_type': scan_type,
+            'status': 'running',
+            'start_time': get_timestamp(),
+            'findings_count': 0
+        }
+        self.state.save_scan(scan_record)
         
         return scan_id
     
@@ -178,178 +163,307 @@ class BugBountyAgent:
         chains = []
         
         try:
-            print(f"🔍 Phase 1: Reconnaissance on {target.url}")
-            recon_data = self.scanner.reconnaissance(target.url)
+            url = target['url']
+            
+            # Phase 1: Reconnaissance
+            log_info(f"🔍 Phase 1: Reconnaissance on {url}")
+            self._emit_log('info', f"🔍 Phase 1: Reconnaissance on {url}")
+            
+            recon_data = self.scanner.reconnaissance(url)
             if recon_data:
-                print(f"   ✅ Found {len(recon_data.get('subdomains', []))} subdomains")
-                print(f"   ✅ Found {len(recon_data.get('ports', []))} open ports")
+                subdomains = recon_data.get('subdomains', [])
+                ports = recon_data.get('ports', [])
+                log_info(f"   ✅ Found {len(subdomains)} subdomains")
+                log_info(f"   ✅ Found {len(ports)} open ports")
+                self._emit_log('info', f"   ✅ Found {len(subdomains)} subdomains, {len(ports)} open ports")
             
-            print(f"🔬 Phase 2: Vulnerability Scanning on {target.url}")
-            vuln_findings = self.scanner.scan_vulnerabilities(target.url, scan_type)
+            # Phase 2: Vulnerability Scanning
+            log_info(f"🔬 Phase 2: Vulnerability Scanning on {url}")
+            self._emit_log('info', f"🔬 Phase 2: Vulnerability Scanning on {url}")
+            
+            vuln_findings = self.scanner.scan_vulnerabilities(url, scan_type)
             findings.extend(vuln_findings)
+            
             if vuln_findings:
-                print(f"   ✅ Found {len(vuln_findings)} vulnerabilities")
+                log_info(f"   ✅ Found {len(vuln_findings)} vulnerabilities")
+                self._emit_log('info', f"   ✅ Found {len(vuln_findings)} vulnerabilities")
                 for f in vuln_findings[:3]:
-                    print(f"      🔴 {f.get('severity', 'info')}: {f.get('title', 'Unknown')}")
+                    log_info(f"      🔴 {f.get('severity', 'info')}: {f.get('title', 'Unknown')}")
+                    self._emit_log('attack', f"      🔴 {f.get('severity', 'info')}: {f.get('title', 'Unknown')}")
             
-            print(f"🧠 Phase 3: Learning from findings")
-            self.learner.learn(findings)
+            # Phase 3: Learning
+            log_info(f"🧠 Phase 3: Learning from findings")
+            self._emit_log('info', f"🧠 Phase 3: Learning from findings")
+            if findings:
+                self.learner.learn(findings)
             
-            print(f"🔗 Phase 4: Building attack chains")
-            chains = self.learner.build_chains(target.url, findings)
+            # Phase 4: Building chains
+            log_info(f"🔗 Phase 4: Building attack chains")
+            self._emit_log('info', f"🔗 Phase 4: Building attack chains")
+            chains = self.brain.analyze_findings(findings)
             if chains:
-                print(f"   ✅ Built {len(chains)} attack chains")
+                log_info(f"   ✅ Built {len(chains)} attack chains")
+                self._emit_log('info', f"   ✅ Built {len(chains)} attack chains")
             
-            print(f"📄 Phase 5: Generating report")
+            # Phase 5: Generate report
+            log_info(f"📄 Phase 5: Generating report")
+            self._emit_log('info', f"📄 Phase 5: Generating report")
+            
             duration = time.time() - start_time
-            report_path = self.reporter.generate(target.url, findings, chains)
+            
+            # Save findings
+            for finding in findings:
+                finding['target_id'] = target_id
+                self.state.save_finding(finding)
+            
+            # Save chains
+            for chain in chains:
+                chain['target_id'] = target_id
+                self.state.save_chain(chain)
             
             # Update target
-            target.status = 'completed'
-            target.findings = findings
-            target.chains = chains
-            target.completed_at = get_timestamp()
-            self._save_state()
+            target['status'] = 'completed'
+            target['findings'] = findings
+            target['chains'] = chains
+            target['completed_at'] = get_timestamp()
+            self.state.save_target(target)
             
-            # Save result
-            self.scan_results[scan_id] = ScanResult(
-                target_id=target_id,
-                findings=findings,
-                chains=chains,
-                duration=duration,
-                report_path=report_path
-            )
+            # Save scan result
+            self.scan_results[scan_id] = {
+                'target_id': target_id,
+                'findings': findings,
+                'chains': chains,
+                'duration': duration,
+                'report_path': None
+            }
             
-            print(f"✅ Scan complete! Found {len(findings)} vulnerabilities in {duration:.1f}s")
-            print(f"📄 Report saved: {report_path}")
+            # Update scan record
+            scan_record = self.state.get_scan(scan_id)
+            if scan_record:
+                scan_record['status'] = 'completed'
+                scan_record['end_time'] = get_timestamp()
+                scan_record['findings_count'] = len(findings)
+                self.state.save_scan(scan_record)
             
+            log_info(f"✅ Scan complete! Found {len(findings)} vulnerabilities in {duration:.1f}s")
+            self._emit_log('success', f"✅ Scan complete! Found {len(findings)} vulnerabilities")
+            if self._socketio:
+                try:
+                    self._socketio.emit('scan_completed', {
+                        'scan_id': scan_id,
+                        'target_id': target_id,
+                        'findings': len(findings),
+                        'duration': duration,
+                        'status': 'completed'
+                    })
+                except:
+                    pass
+        
         except Exception as e:
-            print(f"❌ Scan failed: {e}")
-            target.status = 'failed'
-            self._save_state()
+            log_error(f"❌ Scan failed: {e}")
+            self._emit_log('error', f"❌ Scan failed: {e}")
+            if self._socketio:
+                try:
+                    self._socketio.emit('scan_failed', {
+                        'scan_id': scan_id,
+                        'target_id': target_id,
+                        'error': str(e)
+                    })
+                except:
+                    pass
         
         finally:
-            if scan_id in self.scan_threads:
-                del self.scan_threads[scan_id]
+            if scan_id in self.running_scans:
+                del self.running_scans[scan_id]
+    
+    def get_scan_result(self, scan_id: str) -> Optional[Dict]:
+        """Get the result of a completed scan."""
+        return self.scan_results.get(scan_id)
+    
+    def stop_scan(self, scan_id: str) -> bool:
+        """Stop a running scan."""
+        if scan_id in self.running_scans:
+            scan_record = self.state.get_scan(scan_id)
+            if scan_record:
+                scan_record['status'] = 'stopped'
+                scan_record['end_time'] = get_timestamp()
+                self.state.save_scan(scan_record)
+            
+            log_info(f"⏹️ Scan stopped: {scan_id}")
+            self._emit_log('warning', f"⏹️ Scan stopped: {scan_id}")
+            return True
+        return False
     
     # ============================================================
-    # System Access
+    # Finding Methods
     # ============================================================
     
-    def system_access(self) -> Dict[str, Any]:
-        """
-        Get system access capabilities.
-        
-        Returns:
-            Dict: Access capabilities
-        """
-        return {
-            'browser': {
-                'available': True,
-                'controlled': self.browser.is_connected(),
-                'can_navigate': True,
-                'can_click': True,
-                'can_type': True
-            },
-            'terminal': {
-                'available': True,
-                'can_run_commands': True,
-                'can_install_tools': True
-            },
-            'filesystem': {
-                'available': True,
-                'can_read': True,
-                'can_write': True,
-                'can_create_dirs': True
-            },
-            'process': {
-                'available': True,
-                'can_start': True,
-                'can_stop': True,
-                'can_monitor': True
-            }
-        }
+    def get_findings(self, target_id: Optional[str] = None) -> List[Dict]:
+        """Get all findings or findings for a target."""
+        if target_id:
+            return self.state.get_findings_by_target(target_id)
+        return self.state.get_all_findings()
+    
+    def get_finding(self, finding_id: str) -> Optional[Dict]:
+        """Get a specific finding."""
+        findings = self.state.get_all_findings()
+        for f in findings:
+            if f.get('id') == finding_id:
+                return f
+        return None
     
     # ============================================================
-    # Dashboard Integration
+    # Chain Methods
+    # ============================================================
+    
+    def get_chains(self, target_id: Optional[str] = None) -> List[Dict]:
+        """Get chains for a target or all chains."""
+        if target_id:
+            return self.state.get_chains_by_target(target_id)
+        return self.state.get_all_chains()
+    
+    # ============================================================
+    # Status
     # ============================================================
     
     def get_status(self) -> Dict[str, Any]:
-        """Get agent status for dashboard."""
+        """Get agent status."""
+        stats = self.state.get_statistics()
+        
         return {
-            'status': 'running' if self.running else 'idle',
             'mode': self.config.get('agent.mode', 'hybrid'),
             'targets': len(self.targets),
-            'running_scans': len(self.scan_threads),
-            'total_findings': sum(len(t.findings) for t in self.targets.values()),
-            'system': self.system_access(),
+            'running_scans': len(self.running_scans),
+            'total_findings': stats.get('findings', 0),
+            'browser_active': False,
             'timestamp': get_timestamp()
         }
-    
-    def get_findings(self, target_id: Optional[str] = None) -> List[Dict]:
-        """Get all findings."""
-        if target_id:
-            target = self.targets.get(target_id)
-            return target.findings if target else []
-        
-        all_findings = []
-        for target in self.targets.values():
-            all_findings.extend(target.findings)
-        return all_findings
     
     # ============================================================
     # State Management
     # ============================================================
     
     def _load_state(self):
-        """Load state from disk."""
-        try:
-            with open('data/state.json', 'r') as f:
-                data = json.load(f)
-                for t in data.get('targets', []):
-                    target = Target(
-                        id=t['id'],
-                        url=t['url'],
-                        status=t['status'],
-                        added=t['added'],
-                        findings=t.get('findings', []),
-                        chains=t.get('chains', []),
-                        completed_at=t.get('completed_at')
-                    )
-                    self.targets[target.id] = target
-            print(f"📂 Loaded {len(self.targets)} targets from state")
-        except:
-            pass
-    
-    def _save_state(self):
-        """Save state to disk."""
-        try:
-            os.makedirs('data', exist_ok=True)
-            data = {
-                'targets': [
-                    {
-                        'id': t.id,
-                        'url': t.url,
-                        'status': t.status,
-                        'added': t.added,
-                        'findings': t.findings,
-                        'chains': t.chains,
-                        'completed_at': t.completed_at
-                    }
-                    for t in self.targets.values()
-                ]
-            }
-            with open('data/state.json', 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            print(f"⚠️ Failed to save state: {e}")
-    
+        """Load targets from state."""
+        targets = self.state.get_all_targets()
+        for target in targets:
+            self.targets[target['id']] = target
+        log_info(f"📂 Loaded {len(self.targets)} targets from state")
+
     # ============================================================
-    # Cleanup
+    # Goal API Methods
     # ============================================================
-    
-    def cleanup(self):
-        """Clean up resources."""
-        self.browser.disconnect()
-        self.process.stop_all()
-        print("🧹 Agent cleaned up")
+
+    def access_system(self) -> Dict[str, Any]:
+        """Access the local system like Anydesk/TeamViewer."""
+        if not self.system.is_connected:
+            self.system.connect()
+
+        tool_status = self.tools.check_all_tools()
+        tools_info = {name: {
+            'installed': info.installed,
+            'path': info.path,
+            'version': info.version,
+            'enabled': info.enabled
+        } for name, info in tool_status.items()}
+
+        return {
+            'connected': self.system.is_connected,
+            'system_info': self.system.get_system_info(),
+            'tools': tools_info,
+            'missing_tools': self.tools.get_missing_tools()
+        }
+
+    def hunt_bugs(self, target: str, scan_type: str = 'full') -> Dict[str, Any]:
+        """Autonomously hunt bugs against a target."""
+        target_id = self.add_target(target)
+        scan_id = self.scan(target_id, scan_type)
+
+        return {
+            'target_id': target_id,
+            'scan_id': scan_id,
+            'status': 'started' if scan_id else 'failed',
+            'scan_type': scan_type
+        }
+
+    def learn(self, target_id: Optional[str] = None) -> Dict[str, Any]:
+        """Learn from past findings and update the knowledge base."""
+        if target_id:
+            findings = self.get_findings(target_id)
+        else:
+            findings = self.get_findings()
+
+        result = self.learner.learn(findings)
+        return {
+            'target_id': target_id,
+            'findings_processed': len(findings),
+            'result': result
+        }
+
+    def scan_all(self, scan_type: str = 'full') -> Dict[str, Any]:
+        """Scan all saved targets for vulnerabilities."""
+        scan_ids = []
+        for target_id in list(self.targets.keys()):
+            scan_id = self.scan(target_id, scan_type)
+            if scan_id:
+                scan_ids.append(scan_id)
+
+        return {
+            'total_targets': len(self.targets),
+            'scan_type': scan_type,
+            'scan_ids': scan_ids,
+            'queued': len(scan_ids)
+        }
+
+    def use_tools(self, install_missing: bool = False) -> Dict[str, Any]:
+        """Use all configured security tools and optionally install missing ones."""
+        tool_status = self.tools.check_all_tools()
+        missing = self.tools.get_missing_tools()
+        install_results = None
+
+        if install_missing and missing:
+            install_results = self.tools.install_all_tools()
+            missing = self.tools.get_missing_tools()
+
+        return {
+            'tools': {name: {
+                'installed': info.installed,
+                'path': info.path,
+                'version': info.version,
+                'enabled': info.enabled
+            } for name, info in tool_status.items()},
+            'missing_tools': missing,
+            'install_results': install_results
+        }
+
+    def dashboard(self) -> Dict[str, Any]:
+        """Get dashboard availability and configuration."""
+        return {
+            'enabled': self.config.get('dashboard.enabled', True),
+            'host': self.config.get('dashboard.host', '0.0.0.0'),
+            'port': self.config.get('dashboard.port', 5000),
+            'debug': self.config.get('dashboard.debug', False)
+        }
+
+    def save_state(self, state: Dict[str, Any]) -> bool:
+        """Save generic agent state for persistence."""
+        return self.state.save_state(state)
+
+    def learn_patterns(self, target_id: Optional[str] = None) -> Dict[str, Any]:
+        """Learn vulnerability patterns from findings."""
+        if target_id:
+            findings = self.get_findings(target_id)
+        else:
+            findings = self.get_findings()
+
+        learn_result = self.learner.learn(findings)
+        return {
+            'target_id': target_id,
+            'patterns_added': learn_result.get('new_patterns', 0),
+            'total_patterns': len(self.learner.patterns),
+            'result': learn_result
+        }
+
+    def tell_limitations(self) -> Dict[str, str]:
+        """Explain what the agent cannot do."""
+        return self.system.tell_limitations()

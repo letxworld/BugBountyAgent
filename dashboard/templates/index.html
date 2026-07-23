@@ -17,38 +17,24 @@
                 <span class="brand-text">BugBountyAgent</span>
                 <span class="badge-version">v0.1</span>
             </div>
-
             <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" data-page="dashboard">
+                <a href="/" class="nav-item active" data-page="dashboard">
                     <span class="nav-icon">📊</span>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-item" data-page="targets">
+                <a href="/targets" class="nav-item" data-page="targets">
                     <span class="nav-icon">🎯</span>
                     <span>Targets</span>
                 </a>
-                <a href="#" class="nav-item" data-page="findings">
+                <a href="/findings" class="nav-item" data-page="findings">
                     <span class="nav-icon">🔍</span>
                     <span>Findings</span>
                 </a>
-                <a href="#" class="nav-item" data-page="chains">
+                <a href="/chains" class="nav-item" data-page="chains">
                     <span class="nav-icon">🔗</span>
                     <span>Chains</span>
                 </a>
-                <a href="#" class="nav-item" data-page="scans">
-                    <span class="nav-icon">⚡</span>
-                    <span>Scans</span>
-                </a>
-                <a href="#" class="nav-item" data-page="tools">
-                    <span class="nav-icon">🔧</span>
-                    <span>Tools</span>
-                </a>
-                <a href="#" class="nav-item" data-page="settings">
-                    <span class="nav-icon">⚙️</span>
-                    <span>Settings</span>
-                </a>
             </nav>
-
             <div class="sidebar-footer">
                 <div class="status-indicator" id="connectionStatus">
                     <span class="status-dot connected"></span>
@@ -63,7 +49,6 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Header -->
             <header class="main-header">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle">☰</button>
@@ -122,14 +107,6 @@
                         <span class="log-time">[--:--:--]</span>
                         <span class="log-message">🟢 Connected to BugBountyAgent server</span>
                     </div>
-                    <div class="log-entry log-info">
-                        <span class="log-time">[--:--:--]</span>
-                        <span class="log-message">🤖 Agent initialized</span>
-                    </div>
-                    <div class="log-entry log-info">
-                        <span class="log-time">[--:--:--]</span>
-                        <span class="log-message">📡 Waiting for commands...</span>
-                    </div>
                 </div>
             </section>
 
@@ -160,7 +137,7 @@
             <section class="recent-findings">
                 <div class="section-header">
                     <h3>🔍 Recent Findings</h3>
-                    <a href="#" onclick="navigateTo('findings')">View All →</a>
+                    <a href="/findings">View All →</a>
                 </div>
                 <div class="findings-table-container">
                     <table class="findings-table" id="findingsTable">
@@ -169,13 +146,12 @@
                                 <th>Severity</th>
                                 <th>Title</th>
                                 <th>Target</th>
-                                <th>Type</th>
                                 <th>Time</th>
                             </tr>
                         </thead>
                         <tbody id="findingsTableBody">
                             <tr>
-                                <td colspan="5" class="text-center text-muted">No findings yet. Start a scan!</td>
+                                <td colspan="4" class="text-center text-muted">No findings yet. Start a scan!</td>
                             </tr>
                         </tbody>
                     </table>
@@ -186,7 +162,7 @@
 
     <!-- Modal -->
     <div class="modal-overlay" id="modalOverlay">
-        <div class="modal" id="modal">
+        <div class="modal">
             <div class="modal-header">
                 <h3 id="modalTitle">Add Target</h3>
                 <button class="modal-close" onclick="closeModal()">✕</button>
@@ -196,14 +172,6 @@
                     <label for="targetUrl">Target URL</label>
                     <input type="text" id="targetUrl" placeholder="https://example.com" />
                 </div>
-                <div class="form-group">
-                    <label for="targetScope">Scope (comma separated)</label>
-                    <input type="text" id="targetScope" placeholder="*.example.com" />
-                </div>
-                <div class="form-group">
-                    <label for="targetExclude">Exclude (comma separated)</label>
-                    <input type="text" id="targetExclude" placeholder="*.dev.example.com" />
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -212,7 +180,6 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="/static/js/dashboard.js"></script>

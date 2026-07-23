@@ -1,0 +1,49 @@
+{
+  "target": "https://indrive.com",
+  "subdomains": [
+    "fr.indrive.com",
+    "rabota.indrive.com",
+    "rideshare.indrive.com",
+    "jlml.indrive.com",
+    "www.yourpace.indrive.com",
+    "trustgame.indrive.com",
+    "internal.qa.delivery.indrive.com",
+    "web.indrive.com",
+    "results.2024.indrive.com",
+    "www.supernovas.indrive.com",
+    "promotion.indrive.com",
+    "ms.indrive.com",
+    "bike.indrive.com",
+    "wildcard.internal.sandbox.delivery.indrive.com",
+    "brand.indrive.com",
+    "hostmaster.indrive.com",
+    "birthday.indrive.com",
+    "sparklab.indrive.com",
+    "www.sparklab.indrive.com",
+    "www.intercity.indrive.com"
+  ],
+  "ports": [
+    80,
+    443
+  ],
+  "technologies": {
+    "server": "CloudFront",
+    "content_type": "text/html"
+  },
+  "dns": {
+    "ip": "18.67.195.69"
+  },
+  "ssl": {
+    "subject": {
+      "commonName": "*.indrive.com"
+    },
+    "issuer": {
+      "countryName": "US",
+      "organizationName": "Amazon",
+      "commonName": "Amazon RSA 2048 M01"
+    },
+    "not_before": "Apr 28 00:00:00 2026 GMT",
+    "not_after": "Nov 11 23:59:59 2026 GMT",
+    "valid": true
+  }
+}

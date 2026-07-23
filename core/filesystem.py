@@ -26,29 +26,29 @@ class FileSystemController:
     def __init__(self, config: Config):
         self.config = config
         
-        # Directories
-        self.data_dir = config.get('system.data_dir', './data')
-        self.logs_dir = config.get('system.logs_dir', './logs')
-        self.reports_dir = config.get('system.reports_dir', './data/reports')
-        self.findings_dir = config.get('system.findings_dir', './data/findings')
-        self.chains_dir = config.get('system.chains_dir', './data/chains')
-        self.patterns_dir = config.get('system.patterns_dir', './data/patterns')
-        self.screenshots_dir = config.get('system.screenshots_dir', './data/screenshots')
-        self.tool_outputs_dir = config.get('system.tool_outputs_dir', './data/tool_outputs')
-        self.temp_dir = config.get('system.temp_dir', './data/temp')
+        # Get config values as strings (IMPORTANT: convert to str)
+        self.data_dir = str(config.get('system.data_dir', './data'))
+        self.logs_dir = str(config.get('system.logs_dir', './logs'))
+        self.reports_dir = str(config.get('system.reports_dir', './data/reports'))
+        self.findings_dir = str(config.get('system.findings_dir', './data/findings'))
+        self.chains_dir = str(config.get('system.chains_dir', './data/chains'))
+        self.patterns_dir = str(config.get('system.patterns_dir', './data/patterns'))
+        self.screenshots_dir = str(config.get('system.screenshots_dir', './data/screenshots'))
+        self.tool_outputs_dir = str(config.get('system.tool_outputs_dir', './data/tool_outputs'))
+        self.temp_dir = str(config.get('system.temp_dir', './data/temp'))
         
         # Retention settings
         self.retention_days = {
-            'logs': config.get('storage.retention.logs', 30),
-            'reports': config.get('storage.retention.reports', 60),
-            'screenshots': config.get('storage.retention.screenshots', 30),
-            'findings': config.get('storage.retention.findings', 365),
-            'chains': config.get('storage.retention.chains', 180),
-            'patterns': config.get('storage.retention.patterns', 180),
-            'tool_outputs': config.get('storage.retention.tool_outputs', 30),
+            'logs': int(config.get('storage.retention.logs', 30)),
+            'reports': int(config.get('storage.retention.reports', 60)),
+            'screenshots': int(config.get('storage.retention.screenshots', 30)),
+            'findings': int(config.get('storage.retention.findings', 365)),
+            'chains': int(config.get('storage.retention.chains', 180)),
+            'patterns': int(config.get('storage.retention.patterns', 180)),
+            'tool_outputs': int(config.get('storage.retention.tool_outputs', 30)),
         }
         
-        self.max_total_gb = config.get('storage.max_total_gb', 50)
+        self.max_total_gb = float(config.get('storage.max_total_gb', 50))
         
         # Create directories
         self._ensure_dirs()
@@ -238,6 +238,15 @@ class FileSystemController:
                 findings.append(data)
         return findings
     
+    def load_all_findings(self) -> List[Dict]:
+        findings = []
+        files = self.list_files(self.findings_dir, '*.json')
+        for file in files:
+            data = self.read_json(file)
+            if data:
+                findings.append(data)
+        return findings
+    
     def save_report(self, target_id: str, content: Union[str, Dict]) -> str:
         timestamp = get_timestamp()
         path = os.path.join(self.reports_dir, f"{target_id}_{timestamp}.json")
@@ -289,7 +298,7 @@ class FileSystemController:
             'total': 0
         }
         
-        db_path = self.config.get('database.path', './data/state.db')
+        db_path = str(self.config.get('database.path', './data/state.db'))
         if self.file_exists(db_path):
             usage['database'] = self.get_size(db_path)
         

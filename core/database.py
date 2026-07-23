@@ -7,7 +7,7 @@ SQLite database operations, models, and CRUD for persistence.
 import sqlite3
 import json
 import os
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from .config import Config
@@ -27,6 +27,7 @@ class Database:
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
         self._init_tables()
+        print(f"🗄️ Database initialized at: {self.db_path}")
     
     def _get_connection(self) -> sqlite3.Connection:
         """Get a database connection."""
@@ -85,23 +86,6 @@ class Database:
             )
         ''')
         
-        # Patterns table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS patterns (
-                id TEXT PRIMARY KEY,
-                signature TEXT UNIQUE,
-                title TEXT,
-                severity TEXT,
-                type TEXT,
-                confidence REAL,
-                occurrences INTEGER,
-                first_seen TEXT,
-                last_seen TEXT,
-                indicators TEXT,
-                raw_data TEXT
-            )
-        ''')
-        
         # Scans table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS scans (
@@ -114,15 +98,6 @@ class Database:
                 findings_count INTEGER,
                 raw_data TEXT,
                 FOREIGN KEY (target_id) REFERENCES targets(id)
-            )
-        ''')
-        
-        # Settings table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                updated_at TEXT
             )
         ''')
         
@@ -154,7 +129,7 @@ class Database:
             conn.commit()
             return True
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return False
         finally:
             conn.close()
@@ -171,7 +146,7 @@ class Database:
                 return json.loads(row[0])
             return None
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return None
         finally:
             conn.close()
@@ -186,7 +161,7 @@ class Database:
             rows = cursor.fetchall()
             return [json.loads(row[0]) for row in rows]
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return []
         finally:
             conn.close()
@@ -199,11 +174,10 @@ class Database:
         try:
             cursor.execute('DELETE FROM targets WHERE id = ?', (target_id,))
             cursor.execute('DELETE FROM findings WHERE target_id = ?', (target_id,))
-            cursor.execute('DELETE FROM chains WHERE target_id = ?', (target_id,))
             conn.commit()
             return True
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return False
         finally:
             conn.close()
@@ -243,25 +217,8 @@ class Database:
             conn.commit()
             return True
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return False
-        finally:
-            conn.close()
-    
-    def get_finding(self, finding_id: str) -> Optional[Dict]:
-        """Get a finding by ID."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('SELECT raw_data FROM findings WHERE id = ?', (finding_id,))
-            row = cursor.fetchone()
-            if row:
-                return json.loads(row[0])
-            return None
-        except Exception as e:
-            print(f"Database error: {e}")
-            return None
         finally:
             conn.close()
     
@@ -275,22 +232,22 @@ class Database:
             rows = cursor.fetchall()
             return [json.loads(row[0]) for row in rows]
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return []
         finally:
             conn.close()
     
-    def get_all_findings(self, limit: int = 100) -> List[Dict]:
+    def get_all_findings(self) -> List[Dict]:
         """Get all findings."""
         conn = self._get_connection()
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT raw_data FROM findings ORDER BY timestamp DESC LIMIT ?', (limit,))
+            cursor.execute('SELECT raw_data FROM findings ORDER BY timestamp DESC')
             rows = cursor.fetchall()
             return [json.loads(row[0]) for row in rows]
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return []
         finally:
             conn.close()
@@ -322,7 +279,7 @@ class Database:
             conn.commit()
             return True
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return False
         finally:
             conn.close()
@@ -337,58 +294,86 @@ class Database:
             rows = cursor.fetchall()
             return [json.loads(row[0]) for row in rows]
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_all_chains(self) -> List[Dict]:
+        """Get all saved chains."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('SELECT raw_data FROM chains ORDER BY timestamp DESC')
+            rows = cursor.fetchall()
+            return [json.loads(row[0]) for row in rows]
+        except Exception as e:
+            print(f"❌ Database error: {e}")
             return []
         finally:
             conn.close()
     
     # ============================================================
-    # Pattern Operations
+    # Scan Operations
     # ============================================================
     
-    def save_pattern(self, pattern: Dict[str, Any]) -> bool:
-        """Save a pattern to database."""
+    def save_scan(self, scan: Dict[str, Any]) -> bool:
+        """Save a scan to database."""
         conn = self._get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
-                INSERT OR REPLACE INTO patterns 
-                (id, signature, title, severity, type, confidence,
-                 occurrences, first_seen, last_seen, indicators, raw_data)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO scans 
+                (id, target_id, scan_type, status, start_time, end_time, findings_count, raw_data)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                pattern.get('id', generate_id()),
-                pattern.get('signature', ''),
-                pattern.get('title', 'Unknown Pattern'),
-                pattern.get('severity', 'medium'),
-                pattern.get('type', 'unknown'),
-                pattern.get('confidence', 0.5),
-                pattern.get('occurrences', 1),
-                pattern.get('first_seen', get_timestamp()),
-                pattern.get('last_seen', get_timestamp()),
-                json.dumps(pattern.get('indicators', []), default=str),
-                json.dumps(pattern, default=str)
+                scan.get('id', generate_id()),
+                scan.get('target_id'),
+                scan.get('scan_type', 'full'),
+                scan.get('status', 'running'),
+                scan.get('start_time', get_timestamp()),
+                scan.get('end_time'),
+                scan.get('findings_count', 0),
+                json.dumps(scan, default=str)
             ))
             conn.commit()
             return True
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return False
         finally:
             conn.close()
     
-    def get_patterns(self) -> List[Dict]:
-        """Get all patterns."""
+    def get_scan(self, scan_id: str) -> Optional[Dict]:
+        """Get a scan by ID."""
         conn = self._get_connection()
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT raw_data FROM patterns ORDER BY confidence DESC')
+            cursor.execute('SELECT raw_data FROM scans WHERE id = ?', (scan_id,))
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row[0])
+            return None
+        except Exception as e:
+            print(f"❌ Database error: {e}")
+            return None
+        finally:
+            conn.close()
+    
+    def get_scans_by_target(self, target_id: str) -> List[Dict]:
+        """Get all scans for a target."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('SELECT raw_data FROM scans WHERE target_id = ? ORDER BY start_time DESC', (target_id,))
             rows = cursor.fetchall()
             return [json.loads(row[0]) for row in rows]
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
             return []
         finally:
             conn.close()
@@ -417,14 +402,11 @@ class Database:
             cursor.execute('SELECT COUNT(*) FROM chains')
             stats['chains'] = cursor.fetchone()[0]
             
-            cursor.execute('SELECT COUNT(*) FROM patterns')
-            stats['patterns'] = cursor.fetchone()[0]
-            
-            # Database size
-            stats['size'] = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
+            cursor.execute('SELECT COUNT(*) FROM scans')
+            stats['scans'] = cursor.fetchone()[0]
             
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"❌ Database error: {e}")
         
         finally:
             conn.close()

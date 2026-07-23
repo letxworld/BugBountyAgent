@@ -1,0 +1,13 @@
+{
+  "id": "w9pp0ihbvvej",
+  "signature": "a452877ccd97927a",
+  "title": "Missing Security Header: Content-Security-Policy",
+  "severity": "medium",
+  "type": "misconfig",
+  "indicators": [],
+  "confidence": 0.72,
+  "occurrences": 2,
+  "first_seen": "2026-07-23 13:09:24",
+  "last_seen": "2026-07-23 15:31:55",
+  "source": "custom"
+}

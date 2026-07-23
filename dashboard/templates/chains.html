@@ -33,18 +33,6 @@
                     <span class="nav-icon">🔗</span>
                     <span>Chains</span>
                 </a>
-                <a href="#" class="nav-item" data-page="scans">
-                    <span class="nav-icon">⚡</span>
-                    <span>Scans</span>
-                </a>
-                <a href="#" class="nav-item" data-page="tools">
-                    <span class="nav-icon">🔧</span>
-                    <span>Tools</span>
-                </a>
-                <a href="#" class="nav-item" data-page="settings">
-                    <span class="nav-icon">⚙️</span>
-                    <span>Settings</span>
-                </a>
             </nav>
             <div class="sidebar-footer">
                 <div class="status-indicator" id="connectionStatus">
@@ -66,7 +54,7 @@
                 </div>
             </header>
 
-            <section class="stats-grid" id="statsGrid">
+            <section class="stats-grid" style="margin-bottom:20px;">
                 <div class="stat-card">
                     <div class="stat-icon">🔗</div>
                     <div class="stat-info">
@@ -81,49 +69,17 @@
                         <span class="stat-label">Completed</span>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon">⏳</div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statIncomplete">0</span>
-                        <span class="stat-label">In Progress</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">💀</div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statExploitable">0</span>
-                        <span class="stat-label">Exploitable</span>
-                    </div>
-                </div>
             </section>
 
-            <section class="chains-section" style="flex:1; display:flex; flex-direction:column;">
-                <div class="chains-toolbar">
-                    <div class="search-box">
-                        <input type="text" id="searchChains" placeholder="Search chains..." onkeyup="filterChains()">
-                    </div>
-                    <div class="filter-group">
-                        <select id="severityFilter" onchange="filterChains()">
-                            <option value="all">All Severity</option>
-                            <option value="critical">Critical</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="chains-container" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding: 16px 0;">
-                    <div id="chainsList">
-                        <div class="text-center text-muted" style="padding:40px;">No attack chains found</div>
-                    </div>
-                </div>
+            <section style="flex:1; overflow-y:auto;" id="chainsList">
+                <div class="text-center text-muted" style="padding:40px;">No attack chains found</div>
             </section>
         </main>
     </div>
 
     <!-- Chain Detail Modal -->
     <div class="modal-overlay" id="chainDetailModal">
-        <div class="modal" style="max-width: 700px;">
+        <div class="modal" style="max-width:700px;">
             <div class="modal-header">
                 <h3 id="chainDetailTitle">Chain Details</h3>
                 <button class="modal-close" onclick="closeChainDetail()">✕</button>
@@ -137,149 +93,6 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script>
-        const socket = io();
-        let chains = [];
-
-        socket.on('connect', () => {
-            updateConnectionStatus('connected');
-            refreshChains();
-        });
-
-        socket.on('disconnect', () => {
-            updateConnectionStatus('disconnected');
-        });
-
-        socket.on('chains_update', (data) => {
-            chains = data.chains || [];
-            renderChains();
-            updateStats();
-        });
-
-        socket.on('error', (data) => {
-            showToast(`❌ Error: ${data.message}`, 'error');
-        });
-
-        function updateConnectionStatus(status) {
-            const dot = document.querySelector('#connectionStatus .status-dot');
-            const text = document.querySelector('#connectionStatus .status-text');
-            dot.className = 'status-dot ' + status;
-            text.textContent = status === 'connected' ? 'Connected' : 'Disconnected';
-        }
-
-        function refreshChains() {
-            socket.emit('get_chains', {});
-        }
-
-        function updateStats() {
-            const stats = {total: 0, complete: 0, incomplete: 0, exploitable: 0};
-            chains.forEach(c => {
-                stats.total++;
-                if (c.completed) stats.complete++;
-                else stats.incomplete++;
-                if (c.exploitable) stats.exploitable++;
-            });
-            document.getElementById('statTotal').textContent = stats.total;
-            document.getElementById('statComplete').textContent = stats.complete;
-            document.getElementById('statIncomplete').textContent = stats.incomplete;
-            document.getElementById('statExploitable').textContent = stats.exploitable;
-        }
-
-        function renderChains() {
-            const container = document.getElementById('chainsList');
-            const search = document.getElementById('searchChains').value.toLowerCase();
-            const severityFilter = document.getElementById('severityFilter').value;
-
-            let filtered = chains;
-            if (search) {
-                filtered = filtered.filter(c => (c.name || '').toLowerCase().includes(search));
-            }
-            if (severityFilter !== 'all') {
-                filtered = filtered.filter(c => c.severity === severityFilter);
-            }
-
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center text-muted" style="padding:40px;">No attack chains found</div>`;
-                return;
-            }
-
-            container.innerHTML = filtered.map(c => `
-                <div class="chain-card" onclick="viewChain('${c.id}')" style="cursor:pointer; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius); padding:16px 20px; transition:var(--transition);">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="display:flex; align-items:center; gap:12px;">
-                                <span class="severity-badge severity-${c.severity || 'medium'}">${c.severity || 'medium'}</span>
-                                <h4 style="color:var(--text-primary);">${c.name || 'Unknown Chain'}</h4>
-                            </div>
-                            <div style="color:var(--text-muted); font-size:13px; margin-top:4px;">
-                                ${c.steps || 0} steps · ${c.findings || 0} findings
-                                ${c.completed ? '✅ Completed' : '⏳ In Progress'}
-                            </div>
-                        </div>
-                        <div style="color:var(--text-muted); font-size:13px;">
-                            ${c.timestamp || ''}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function filterChains() {
-            renderChains();
-        }
-
-        function viewChain(chainId) {
-            const chain = chains.find(c => c.id === chainId);
-            if (!chain) return;
-
-            document.getElementById('chainDetailTitle').textContent = chain.name || 'Chain Details';
-            document.getElementById('chainDetailBody').innerHTML = `
-                <div style="display:flex; flex-direction:column; gap:12px;">
-                    <p><strong>Severity:</strong> <span class="severity-badge severity-${chain.severity || 'medium'}">${chain.severity || 'medium'}</span></p>
-                    <p><strong>Status:</strong> ${chain.completed ? '✅ Completed' : '⏳ In Progress'}</p>
-                    <p><strong>Target:</strong> ${chain.target || 'N/A'}</p>
-                    <p><strong>Steps:</strong> ${chain.steps || 0}</p>
-                    <p><strong>Findings:</strong> ${chain.findings || 0}</p>
-                    ${chain.description ? `<p><strong>Description:</strong> ${chain.description}</p>` : ''}
-                    ${chain.steps ? `
-                        <div>
-                            <strong>Attack Steps:</strong>
-                            <ul style="margin-top:8px; padding-left:20px;">
-                                ${chain.steps.map(s => `<li style="padding:4px 0; color:var(--text-secondary);">${s}</li>`).join('')}
-                            </ul>
-                        </div>
-                    ` : ''}
-                    <p style="color:var(--text-muted); font-size:12px;">Created: ${chain.timestamp || 'N/A'}</p>
-                </div>
-            `;
-            document.getElementById('chainDetailModal').classList.add('active');
-        }
-
-        function closeChainDetail() {
-            document.getElementById('chainDetailModal').classList.remove('active');
-        }
-
-        function showToast(message, type) {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
-        }
-
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-
-        document.getElementById('chainDetailModal').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) closeChainDetail();
-        });
-
-        setInterval(refreshChains, 15000);
-    </script>
+    <script src="/static/js/dashboard.js"></script>
 </body>
 </html>

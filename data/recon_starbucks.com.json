@@ -1,0 +1,53 @@
+{
+  "target": "https://starbucks.com",
+  "subdomains": [
+    "testtrtr9.starbucks.com",
+    "test4thth.starbucks.com",
+    "eapi-gd.starbucks.com",
+    "admin.a.starbucks.com",
+    "previewiden.starbucks.com",
+    "raw.scmtest.starbucks.com",
+    "expsettingsp.starbucks.com",
+    "testbnen.starbucks.com",
+    "00535-ciam-authz-load-eastus.starbucks.com",
+    "batchguidance.starbucks.com",
+    "previewchde.starbucks.com",
+    "jp.openapi.starbucks.com",
+    "test.jd.starbucks.com",
+    "stage00.mfa.starbucks.com",
+    "scoapportaltest.starbucks.com",
+    "vpn.i.a.starbucks.com",
+    "codebrewapi-tst.starbucks.com",
+    "edm.0-2psecurehost-broadcast-devageng.binrepo.starbucks.com",
+    "previewmyen.starbucks.com",
+    "p1-024042.e.starbucks.com"
+  ],
+  "ports": [
+    80,
+    443
+  ],
+  "technologies": {
+    "content_type": "text/html; charset=utf-8",
+    "powered_by": "cwa01"
+  },
+  "dns": {
+    "ip": "104.120.88.223"
+  },
+  "ssl": {
+    "subject": {
+      "countryName": "US",
+      "stateOrProvinceName": "Washington",
+      "localityName": "Seattle",
+      "organizationName": "Starbucks Coffee Company",
+      "commonName": "starbucks.com"
+    },
+    "issuer": {
+      "countryName": "US",
+      "organizationName": "DigiCert Inc",
+      "commonName": "DigiCert Global G3 TLS ECC SHA384 2020 CA1"
+    },
+    "not_before": "Jun 26 00:00:00 2026 GMT",
+    "not_after": "Jan 10 23:59:59 2027 GMT",
+    "valid": true
+  }
+}
