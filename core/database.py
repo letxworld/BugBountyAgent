@@ -8,7 +8,6 @@ import sqlite3
 import json
 import os
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 
 from .config import Config
 from .utils import get_timestamp, generate_id
@@ -22,23 +21,17 @@ class Database:
     def __init__(self, config: Config):
         self.config = config
         self.db_path = config.get('database.path', './data/state.db')
-        
-        # Ensure directory exists
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        
         self._init_tables()
         print(f"🗄️ Database initialized at: {self.db_path}")
     
     def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection."""
         return sqlite3.connect(self.db_path)
     
     def _init_tables(self):
-        """Initialize all database tables."""
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        # Targets table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS targets (
                 id TEXT PRIMARY KEY,
@@ -50,7 +43,6 @@ class Database:
             )
         ''')
         
-        # Findings table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS findings (
                 id TEXT PRIMARY KEY,
@@ -71,7 +63,6 @@ class Database:
             )
         ''')
         
-        # Chains table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS chains (
                 id TEXT PRIMARY KEY,
@@ -86,7 +77,6 @@ class Database:
             )
         ''')
         
-        # Scans table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS scans (
                 id TEXT PRIMARY KEY,
@@ -109,10 +99,8 @@ class Database:
     # ============================================================
     
     def save_target(self, target: Dict[str, Any]) -> bool:
-        """Save a target to database."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('''
                 INSERT OR REPLACE INTO targets 
@@ -135,16 +123,12 @@ class Database:
             conn.close()
     
     def get_target(self, target_id: str) -> Optional[Dict]:
-        """Get a target by ID."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM targets WHERE id = ?', (target_id,))
             row = cursor.fetchone()
-            if row:
-                return json.loads(row[0])
-            return None
+            return json.loads(row[0]) if row else None
         except Exception as e:
             print(f"❌ Database error: {e}")
             return None
@@ -152,14 +136,11 @@ class Database:
             conn.close()
     
     def get_all_targets(self) -> List[Dict]:
-        """Get all targets."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM targets ORDER BY added DESC')
-            rows = cursor.fetchall()
-            return [json.loads(row[0]) for row in rows]
+            return [json.loads(row[0]) for row in cursor.fetchall()]
         except Exception as e:
             print(f"❌ Database error: {e}")
             return []
@@ -167,10 +148,8 @@ class Database:
             conn.close()
     
     def delete_target(self, target_id: str) -> bool:
-        """Delete a target."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('DELETE FROM targets WHERE id = ?', (target_id,))
             cursor.execute('DELETE FROM findings WHERE target_id = ?', (target_id,))
@@ -187,10 +166,8 @@ class Database:
     # ============================================================
     
     def save_finding(self, finding: Dict[str, Any]) -> bool:
-        """Save a finding to database."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('''
                 INSERT OR REPLACE INTO findings 
@@ -223,14 +200,11 @@ class Database:
             conn.close()
     
     def get_findings_by_target(self, target_id: str) -> List[Dict]:
-        """Get all findings for a target."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM findings WHERE target_id = ? ORDER BY timestamp DESC', (target_id,))
-            rows = cursor.fetchall()
-            return [json.loads(row[0]) for row in rows]
+            return [json.loads(row[0]) for row in cursor.fetchall()]
         except Exception as e:
             print(f"❌ Database error: {e}")
             return []
@@ -238,17 +212,42 @@ class Database:
             conn.close()
     
     def get_all_findings(self) -> List[Dict]:
-        """Get all findings."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM findings ORDER BY timestamp DESC')
-            rows = cursor.fetchall()
-            return [json.loads(row[0]) for row in rows]
+            return [json.loads(row[0]) for row in cursor.fetchall()]
         except Exception as e:
             print(f"❌ Database error: {e}")
             return []
+        finally:
+            conn.close()
+    
+    def delete_finding(self, finding_id: str) -> bool:
+        """Delete a finding by ID."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM findings WHERE id = ?', (finding_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"❌ Database error deleting finding: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def clear_findings(self) -> bool:
+        """Clear all findings."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM findings')
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Database error clearing findings: {e}")
+            return False
         finally:
             conn.close()
     
@@ -257,10 +256,8 @@ class Database:
     # ============================================================
     
     def save_chain(self, chain: Dict[str, Any]) -> bool:
-        """Save a chain to database."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('''
                 INSERT OR REPLACE INTO chains 
@@ -285,29 +282,23 @@ class Database:
             conn.close()
     
     def get_chains_by_target(self, target_id: str) -> List[Dict]:
-        """Get all chains for a target."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM chains WHERE target_id = ? ORDER BY timestamp DESC', (target_id,))
-            rows = cursor.fetchall()
-            return [json.loads(row[0]) for row in rows]
+            return [json.loads(row[0]) for row in cursor.fetchall()]
         except Exception as e:
             print(f"❌ Database error: {e}")
             return []
         finally:
             conn.close()
-
+    
     def get_all_chains(self) -> List[Dict]:
-        """Get all saved chains."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM chains ORDER BY timestamp DESC')
-            rows = cursor.fetchall()
-            return [json.loads(row[0]) for row in rows]
+            return [json.loads(row[0]) for row in cursor.fetchall()]
         except Exception as e:
             print(f"❌ Database error: {e}")
             return []
@@ -319,10 +310,8 @@ class Database:
     # ============================================================
     
     def save_scan(self, scan: Dict[str, Any]) -> bool:
-        """Save a scan to database."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('''
                 INSERT OR REPLACE INTO scans 
@@ -347,16 +336,12 @@ class Database:
             conn.close()
     
     def get_scan(self, scan_id: str) -> Optional[Dict]:
-        """Get a scan by ID."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM scans WHERE id = ?', (scan_id,))
             row = cursor.fetchone()
-            if row:
-                return json.loads(row[0])
-            return None
+            return json.loads(row[0]) if row else None
         except Exception as e:
             print(f"❌ Database error: {e}")
             return None
@@ -364,14 +349,11 @@ class Database:
             conn.close()
     
     def get_scans_by_target(self, target_id: str) -> List[Dict]:
-        """Get all scans for a target."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         try:
             cursor.execute('SELECT raw_data FROM scans WHERE target_id = ? ORDER BY start_time DESC', (target_id,))
-            rows = cursor.fetchall()
-            return [json.loads(row[0]) for row in rows]
+            return [json.loads(row[0]) for row in cursor.fetchall()]
         except Exception as e:
             print(f"❌ Database error: {e}")
             return []
@@ -383,32 +365,22 @@ class Database:
     # ============================================================
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get database statistics."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
         stats = {}
-        
         try:
             cursor.execute('SELECT COUNT(*) FROM targets')
             stats['targets'] = cursor.fetchone()[0]
-            
             cursor.execute('SELECT COUNT(*) FROM findings')
             stats['findings'] = cursor.fetchone()[0]
-            
             cursor.execute('SELECT severity, COUNT(*) FROM findings GROUP BY severity')
             stats['severity_counts'] = {row[0]: row[1] for row in cursor.fetchall()}
-            
             cursor.execute('SELECT COUNT(*) FROM chains')
             stats['chains'] = cursor.fetchone()[0]
-            
             cursor.execute('SELECT COUNT(*) FROM scans')
             stats['scans'] = cursor.fetchone()[0]
-            
         except Exception as e:
             print(f"❌ Database error: {e}")
-        
         finally:
             conn.close()
-        
         return stats

@@ -1,0 +1,13 @@
+{
+  "id": "lx5ey9m41fcp",
+  "signature": "b3fc31d7e90081dd",
+  "title": "Server Header Disclosure: nginx",
+  "severity": "low",
+  "type": "misconfig",
+  "indicators": [],
+  "confidence": 0.7,
+  "occurrences": 1,
+  "first_seen": "2026-07-24 11:33:01",
+  "last_seen": "2026-07-24 11:33:01",
+  "source": "custom"
+}

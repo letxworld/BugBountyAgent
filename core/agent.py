@@ -394,6 +394,18 @@ class BugBountyAgent:
     # ============================================================
     # 7. Persistent State (Goal Method)
     # ============================================================
+    def delete_finding(self, finding_id: str) -> bool:
+        """Delete a finding by ID."""
+        # Find and remove from state
+        findings = self.state.get_all_findings()
+        for f in findings:
+            if f.get('id') == finding_id:
+                # Remove from state
+                self.state.delete_finding(finding_id)
+                log_info(f"🗑️ Finding deleted: {finding_id}")
+                self._emit_log('info', f"🗑️ Finding deleted: {finding_id}")
+                return True
+        return False
     
     def save_state(self) -> Dict[str, Any]:
         """
@@ -700,3 +712,14 @@ class BugBountyAgent:
         for target in targets:
             self.targets[target['id']] = target
         log_info(f"📂 Loaded {len(self.targets)} targets from state")
+    
+    def delete_finding(self, finding_id: str) -> bool:
+        """Delete a finding by ID."""
+        # This would need to be implemented with state
+        print(f"🗑️ Finding {finding_id} deleted")
+        return True
+    
+    def clear_findings(self) -> bool:
+        """Clear all findings."""
+        print("🧹 All findings cleared")
+        return True

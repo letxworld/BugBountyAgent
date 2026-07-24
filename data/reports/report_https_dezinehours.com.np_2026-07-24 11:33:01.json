@@ -1,0 +1,227 @@
+{
+  "metadata": {
+    "generated_at": "2026-07-24 11:33:01",
+    "tool": "BugBountyAgent",
+    "version": "0.1.0",
+    "target": "https://dezinehours.com.np"
+  },
+  "summary": {
+    "total_findings": 9,
+    "severity_counts": {
+      "critical": 0,
+      "high": 2,
+      "medium": 6,
+      "low": 1,
+      "info": 0
+    },
+    "chains": 1,
+    "executive_summary": "A total of **9** vulnerabilities were found, including \ud83d\udfe0 **2 high** severity vulnerabilities were identified, \ud83d\udfe1 **6 medium** severity vulnerabilities were identified. Immediate attention is recommended for critical and high severity findings."
+  },
+  "findings": [
+    {
+      "id": "page_1",
+      "title": "Sensitive Information Disclosure: API Key",
+      "severity": "high",
+      "description": "Sensitive API Key found in page source",
+      "remediation": "Remove sensitive data from client-side code",
+      "source": "active_scan",
+      "timestamp": "2026-07-24 11:32:43",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "page_1",
+      "title": "Sensitive Information Disclosure: API Key",
+      "severity": "high",
+      "description": "Sensitive API Key found in page source",
+      "remediation": "Remove sensitive data from client-side code",
+      "source": "active_scan",
+      "timestamp": "2026-07-24 11:32:58",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_1",
+      "title": "Missing Security Header: X-Frame-Options",
+      "severity": "medium",
+      "description": "Missing X-Frame-Options header (clickjacking risk)",
+      "remediation": "Add X-Frame-Options header to server configuration",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_2",
+      "title": "Missing Security Header: X-XSS-Protection",
+      "severity": "medium",
+      "description": "Missing X-XSS-Protection header",
+      "remediation": "Add X-XSS-Protection header to server configuration",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_3",
+      "title": "Missing Security Header: X-Content-Type-Options",
+      "severity": "medium",
+      "description": "Missing X-Content-Type-Options header (MIME sniffing risk)",
+      "remediation": "Add X-Content-Type-Options header to server configuration",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_4",
+      "title": "Missing Security Header: Content-Security-Policy",
+      "severity": "medium",
+      "description": "Missing Content-Security-Policy header",
+      "remediation": "Add Content-Security-Policy header to server configuration",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_5",
+      "title": "Missing Security Header: Strict-Transport-Security",
+      "severity": "medium",
+      "description": "Missing HSTS header",
+      "remediation": "Add Strict-Transport-Security header to server configuration",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_6",
+      "title": "Missing Security Header: Referrer-Policy",
+      "severity": "medium",
+      "description": "Missing Referrer-Policy header",
+      "remediation": "Add Referrer-Policy header to server configuration",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    },
+    {
+      "id": "custom_7",
+      "title": "Server Header Disclosure: nginx",
+      "severity": "low",
+      "description": "Server header exposes: nginx",
+      "remediation": "Remove or obfuscate Server header",
+      "source": "custom",
+      "timestamp": "2026-07-24 11:32:33",
+      "target": "https://dezinehours.com.np"
+    }
+  ],
+  "chains": [
+    {
+      "id": "chain_https://dezinehours.com.np_20260724113301",
+      "name": "Attack Chain: https://dezinehours.com.np",
+      "target": "https://dezinehours.com.np",
+      "severity": "high",
+      "steps": [
+        {
+          "step": 1,
+          "type": "Missing Security Header: X-Frame-Options",
+          "description": "Missing X-Frame-Options header (clickjacking risk)",
+          "finding_id": "custom_1",
+          "severity": "medium",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 2,
+          "type": "Missing Security Header: X-XSS-Protection",
+          "description": "Missing X-XSS-Protection header",
+          "finding_id": "custom_2",
+          "severity": "medium",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 3,
+          "type": "Missing Security Header: X-Content-Type-Options",
+          "description": "Missing X-Content-Type-Options header (MIME sniffing risk)",
+          "finding_id": "custom_3",
+          "severity": "medium",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 4,
+          "type": "Missing Security Header: Content-Security-Policy",
+          "description": "Missing Content-Security-Policy header",
+          "finding_id": "custom_4",
+          "severity": "medium",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 5,
+          "type": "Missing Security Header: Strict-Transport-Security",
+          "description": "Missing HSTS header",
+          "finding_id": "custom_5",
+          "severity": "medium",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 6,
+          "type": "Missing Security Header: Referrer-Policy",
+          "description": "Missing Referrer-Policy header",
+          "finding_id": "custom_6",
+          "severity": "medium",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 7,
+          "type": "Server Header Disclosure: nginx",
+          "description": "Server header exposes: nginx",
+          "finding_id": "custom_7",
+          "severity": "low",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 8,
+          "type": "Sensitive Information Disclosure: API Key",
+          "description": "Sensitive API Key found in page source",
+          "finding_id": "page_1",
+          "severity": "high",
+          "cve_id": "",
+          "url": ""
+        },
+        {
+          "step": 9,
+          "type": "Sensitive Information Disclosure: API Key",
+          "description": "Sensitive API Key found in page source",
+          "finding_id": "page_1",
+          "severity": "high",
+          "cve_id": "",
+          "url": ""
+        }
+      ],
+      "total_steps": 9,
+      "finding_ids": [
+        "custom_1",
+        "custom_2",
+        "custom_3",
+        "custom_4",
+        "custom_5",
+        "custom_6",
+        "custom_7",
+        "page_1",
+        "page_1"
+      ],
+      "completed": true,
+      "timestamp": "2026-07-24T11:33:01.961920",
+      "description": "Attack chain consisting of 9 vulnerabilities on https://dezinehours.com.np",
+      "exploitable": true,
+      "success_rate": 0.72
+    }
+  ],
+  "recommendations": [
+    "\ud83d\udfe0 **High Priority**: Fix high severity vulnerabilities as soon as possible",
+    "\ud83d\udfe1 **Medium Priority**: Address medium severity issues in the next sprint",
+    "\u2705 **Verification**: All findings should be verified before reporting",
+    "\ud83d\udccb **Documentation**: Document all findings with reproduction steps",
+    "\ud83d\udd12 **Responsible Disclosure**: Follow the program's disclosure guidelines"
+  ]
+}

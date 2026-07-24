@@ -9,16 +9,9 @@ let state = {
     findings: [],
     chains: [],
     scans: [],
-    isScanning: false
+    isScanning: false,
+    currentPage: 'dashboard'
 };
-
-// ============================================================
-// DOM References
-// ============================================================
-
-function getElement(id) {
-    return document.getElementById(id);
-}
 
 // ============================================================
 // Connection Events
@@ -99,6 +92,15 @@ socket.on('scan_completed', (data) => {
     refreshAll();
 });
 
+socket.on('scan_stopped', (data) => {
+    console.log('⏹️ Scan stopped:', data);
+    state.isScanning = false;
+    showToast(`⏹️ Scan stopped`, 'info');
+    addLog('warning', `⏹️ Scan stopped: ${data.scan_id}`);
+    updateConnectionStatus('connected');
+    refreshAll();
+});
+
 socket.on('error', (data) => {
     console.error('❌ Error:', data);
     showToast(`❌ ${data.message}`, 'error');
@@ -127,23 +129,23 @@ function updateConnectionStatus(status) {
 
 function updateStats(agent) {
     if (!agent) return;
-    const el = (id) => getElement(id);
+    const el = (id) => document.getElementById(id);
     if (el('statTargets')) el('statTargets').textContent = agent.targets || 0;
     if (el('statScans')) el('statScans').textContent = agent.running_scans || 0;
 }
 
 function updateStatsFromTargets() {
-    const el = getElement('statTargets');
+    const el = document.getElementById('statTargets');
     if (el) el.textContent = state.targets.length;
 }
 
 function updateStatsFromFindings() {
-    const el = getElement('statFindings');
+    const el = document.getElementById('statFindings');
     if (el) el.textContent = state.findings.length;
 }
 
 function updateStatsFromChains() {
-    const el = getElement('statChains');
+    const el = document.getElementById('statChains');
     if (el) el.textContent = state.chains.length;
 }
 
@@ -152,7 +154,7 @@ function updateStatsFromChains() {
 // ============================================================
 
 function addLog(level, message) {
-    const container = getElement('logContainer');
+    const container = document.getElementById('logContainer');
     if (!container) return;
     
     const entry = document.createElement('div');
@@ -168,13 +170,13 @@ function addLog(level, message) {
 }
 
 function clearLog() {
-    const container = getElement('logContainer');
+    const container = document.getElementById('logContainer');
     if (container) container.innerHTML = '';
     addLog('info', '🧹 Log cleared');
 }
 
 function exportLog() {
-    const container = getElement('logContainer');
+    const container = document.getElementById('logContainer');
     if (!container) return;
     
     const entries = container.querySelectorAll('.log-entry');
@@ -200,7 +202,7 @@ function exportLog() {
 // ============================================================
 
 function showToast(message, type = 'info') {
-    const container = getElement('toastContainer') || (() => {
+    const container = document.getElementById('toastContainer') || (() => {
         const div = document.createElement('div');
         div.id = 'toastContainer';
         div.className = 'toast-container';
@@ -224,17 +226,8 @@ function showToast(message, type = 'info') {
 // Targets
 // ============================================================
 
-function renderTargets() {
-    // Dashboard targets table
-    const tbody = getElement('findingsTableBody');
-    if (!tbody) return;
-    
-    // Actually this is for the dashboard - we want to show targets in a different way
-    // The dashboard shows findings, not targets
-}
-
 function renderTargetsTable() {
-    const tbody = getElement('targetsTableBody');
+    const tbody = document.getElementById('targetsTableBody');
     if (!tbody) return;
     
     if (!state.targets || state.targets.length === 0) {
@@ -259,72 +252,82 @@ function renderTargetsTable() {
     `).join('');
 }
 
+function renderTargets() {
+    // Dashboard summary
+    const el = document.getElementById('targetsSummary');
+    if (el) {
+        el.textContent = `${state.targets.length} targets`;
+    }
+}
+
 // ============================================================
 // Findings
 // ============================================================
 
 function renderFindings() {
     // Dashboard recent findings
-    const tbody = getElement('findingsTableBody');
+    const tbody = document.getElementById('findingsTableBody');
     if (!tbody) return;
-    
-    if (!state.findings || state.findings.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No findings yet. Start a scan!</td></tr>`;
-        return;
-    }
-    
-    const recent = state.findings.slice(0, 10);
-    tbody.innerHTML = recent.map(f => `
-        <tr onclick="viewFinding('${f.id}')" style="cursor:pointer;">
-            <td><span class="severity-badge severity-${f.severity || 'info'}">${f.severity || 'info'}</span></td>
-            <td>${f.title || 'Unknown'}</td>
-            <td>${f.target || 'N/A'}</td>
-            <td>${f.timestamp ? f.timestamp.slice(0, 16) : 'N/A'}</td>
-        </tr>
-    `).join('');
-}
-
-function renderFindingsTable() {
-    // Findings page full table
-    const tbody = getElement('findingsTableBody');
-    if (!tbody) return;
-    
-    // If this is called from findings page, render all findings
-    const isFindingsPage = window.location.pathname === '/findings';
     
     if (!state.findings || state.findings.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No findings yet. Start a scan!</td></tr>`;
         return;
     }
     
-    const displayFindings = isFindingsPage ? state.findings : state.findings.slice(0, 10);
-    
-    // Update statistics on findings page
-    updateFindingStats();
-    
-    tbody.innerHTML = displayFindings.map(f => `
-        <tr onclick="viewFinding('${f.id}')" style="cursor:pointer;">
+    const recent = state.findings.slice(0, 10);
+    tbody.innerHTML = recent.map(f => `
+        <tr>
             <td><span class="severity-badge severity-${f.severity || 'info'}">${f.severity || 'info'}</span></td>
             <td>${f.title || 'Unknown'}</td>
             <td>${f.target || 'N/A'}</td>
-            <td>${f.cve_id || '-'}</td>
             <td>${f.timestamp ? f.timestamp.slice(0, 16) : 'N/A'}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="deleteFinding('${f.id}')">🗑️</button>
+            </td>
         </tr>
     `).join('');
 }
 
+function renderFindingsTable() {
+    // Findings page full table
+    const tbody = document.getElementById('findingsTableBody');
+    if (!tbody) return;
+    
+    if (!state.findings || state.findings.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No findings yet. Start a scan!</td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = state.findings.map(f => `
+        <tr>
+            <td><span class="severity-badge severity-${f.severity || 'info'}">${f.severity || 'info'}</span></td>
+            <td>${f.title || 'Unknown'}</td>
+            <td>${f.target || 'N/A'}</td>
+            <td>${f.timestamp ? f.timestamp.slice(0, 16) : 'N/A'}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="deleteFinding('${f.id}')">🗑️</button>
+            </td>
+        </tr>
+    `).join('');
+    
+    // Update statistics
+    updateFindingStats();
+}
+
 function updateFindingStats() {
-    const stats = { total: 0, critical: 0, high: 0, medium: 0 };
+    const stats = { total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 };
     state.findings.forEach(f => {
         stats.total++;
         const sev = f.severity?.toLowerCase() || 'info';
         if (sev === 'critical') stats.critical++;
         else if (sev === 'high') stats.high++;
         else if (sev === 'medium') stats.medium++;
+        else if (sev === 'low') stats.low++;
+        else stats.info++;
     });
     
-    ['statTotal', 'statCritical', 'statHigh', 'statMedium'].forEach(id => {
-        const el = getElement(id);
+    ['statTotal', 'statCritical', 'statHigh', 'statMedium', 'statLow', 'statInfo'].forEach(id => {
+        const el = document.getElementById(id);
         if (el) {
             const key = id.replace('stat', '').toLowerCase();
             el.textContent = stats[key] || 0;
@@ -332,12 +335,27 @@ function updateFindingStats() {
     });
 }
 
+function deleteFinding(findingId) {
+    if (!confirm('Delete this finding?')) return;
+    fetch(`/api/findings/${findingId}`, { method: 'DELETE' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast('🗑️ Finding deleted', 'success');
+                refreshAll();
+            } else {
+                showToast('❌ Failed to delete finding', 'error');
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
 // ============================================================
 // Chains
 // ============================================================
 
 function renderChains() {
-    const container = getElement('chainsList');
+    const container = document.getElementById('chainsList');
     if (!container) return;
     
     if (!state.chains || state.chains.length === 0) {
@@ -345,12 +363,11 @@ function renderChains() {
         return;
     }
     
-    // Update stats
-    const el = getElement('statTotal');
+    const el = document.getElementById('statTotal');
     if (el) el.textContent = state.chains.length;
     
     container.innerHTML = state.chains.map(c => `
-        <div class="chain-card" onclick="viewChain('${c.id}')" style="cursor:pointer; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius); padding:16px 20px; margin-bottom:12px;">
+        <div class="chain-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius); padding:16px 20px; margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
                     <div style="display:flex; align-items:center; gap:12px;">
@@ -371,23 +388,71 @@ function renderChains() {
 }
 
 // ============================================================
+// Scans - Stop All
+// ============================================================
+
+function stopAllScans() {
+    if (!confirm('Stop all running scans?')) return;
+    fetch('/api/scans/stop-all', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast('⏹️ All scans stopped', 'info');
+                addLog('warning', '⏹️ All scans stopped by user');
+                refreshAll();
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+// ============================================================
+// Refresh All
+// ============================================================
+
+function refreshAll() {
+    refreshStatus();
+    refreshTargets();
+    refreshFindings();
+    refreshChains();
+}
+
+function refreshStatus() {
+    socket.emit('get_status');
+}
+
+function refreshTargets() {
+    socket.emit('refresh_targets');
+}
+
+function refreshFindings() {
+    socket.emit('get_findings', {});
+}
+
+function refreshChains() {
+    socket.emit('get_chains', {});
+}
+
+function refreshData() {
+    console.log('🔄 Refreshing all data...');
+    refreshAll();
+}
+
+// ============================================================
 // Modal
 // ============================================================
 
 function showAddTarget() {
-    const overlay = getElement('modalOverlay');
-    const title = getElement('modalTitle');
-    if (title) title.textContent = '🎯 Add Target';
+    const overlay = document.getElementById('modalOverlay');
     if (overlay) overlay.classList.add('active');
 }
 
 function closeModal() {
-    const overlay = getElement('modalOverlay');
+    const overlay = document.getElementById('modalOverlay');
     if (overlay) overlay.classList.remove('active');
 }
 
 function saveTarget() {
-    const urlInput = getElement('targetUrl');
+    const urlInput = document.getElementById('targetUrl');
     if (!urlInput) return;
     const url = urlInput.value.trim();
     if (!url) {
@@ -397,79 +462,6 @@ function saveTarget() {
     socket.emit('add_target', { url: url });
     closeModal();
     urlInput.value = '';
-}
-
-function viewFinding(findingId) {
-    fetch(`/api/findings/${findingId}`)
-        .then(res => res.json())
-        .then(data => {
-            const overlay = getElement('findingDetailModal') || getElement('modalOverlay');
-            const title = getElement('findingDetailTitle') || getElement('modalTitle');
-            const body = getElement('findingDetailBody') || getElement('modalBody');
-            
-            if (title) title.textContent = `🔍 ${data.title || 'Finding Details'}`;
-            if (body) {
-                body.innerHTML = `
-                    <div class="finding-detail">
-                        <p><strong>Severity:</strong> <span class="severity-badge severity-${data.severity || 'info'}">${data.severity || 'info'}</span></p>
-                        <p><strong>Type:</strong> ${data.type || 'Unknown'}</p>
-                        <p><strong>Target:</strong> ${data.target || 'N/A'}</p>
-                        <p><strong>Description:</strong> ${data.description || 'No description'}</p>
-                        ${data.cve_id ? `<p><strong>CVE:</strong> ${data.cve_id}</p>` : ''}
-                        ${data.cvss_score ? `<p><strong>CVSS:</strong> ${data.cvss_score}</p>` : ''}
-                        ${data.remediation ? `<p><strong>Remediation:</strong> ${data.remediation}</p>` : ''}
-                        ${data.reproduction_steps ? `<p><strong>Reproduction Steps:</strong><br/>${data.reproduction_steps}</p>` : ''}
-                        <p><strong>Found:</strong> ${data.timestamp || 'N/A'}</p>
-                    </div>
-                `;
-            }
-            if (overlay) overlay.classList.add('active');
-        })
-        .catch(err => showToast(`❌ Failed to load: ${err.message}`, 'error'));
-}
-
-function viewChain(chainId) {
-    const chain = state.chains.find(c => c.id === chainId);
-    if (!chain) return;
-    
-    const overlay = getElement('chainDetailModal') || getElement('modalOverlay');
-    const title = getElement('chainDetailTitle') || getElement('modalTitle');
-    const body = getElement('chainDetailBody') || getElement('modalBody');
-    
-    if (title) title.textContent = `🔗 ${chain.name || 'Chain Details'}`;
-    if (body) {
-        body.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:12px;">
-                <p><strong>Severity:</strong> <span class="severity-badge severity-${chain.severity || 'medium'}">${chain.severity || 'medium'}</span></p>
-                <p><strong>Status:</strong> ${chain.completed ? '✅ Completed' : '⏳ In Progress'}</p>
-                <p><strong>Target:</strong> ${chain.target || 'N/A'}</p>
-                <p><strong>Steps:</strong> ${chain.total_steps || chain.steps?.length || 0}</p>
-                ${chain.description ? `<p><strong>Description:</strong> ${chain.description}</p>` : ''}
-                ${chain.steps && chain.steps.length ? `
-                    <div>
-                        <strong>Attack Steps:</strong>
-                        <ul style="margin-top:8px; padding-left:20px;">
-                            ${chain.steps.map(s => `<li style="padding:4px 0; color:var(--text-secondary);">${s.step || s}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                <p style="color:var(--text-muted); font-size:12px;">Created: ${chain.timestamp || 'N/A'}</p>
-            </div>
-        `;
-    }
-    if (overlay) overlay.classList.add('active');
-}
-
-function closeFindingDetail() {
-    const overlay = getElement('findingDetailModal');
-    if (overlay) overlay.classList.remove('active');
-    closeModal();
-}
-
-function closeChainDetail() {
-    const overlay = getElement('chainDetailModal');
-    if (overlay) overlay.classList.remove('active');
-    closeModal();
 }
 
 // ============================================================
@@ -511,37 +503,6 @@ function runFullScan() {
 
 function generateReport() {
     showToast('📄 Report generation coming soon', 'info');
-}
-
-// ============================================================
-// Refresh Functions
-// ============================================================
-
-function refreshAll() {
-    refreshStatus();
-    refreshTargets();
-    refreshFindings();
-    refreshChains();
-}
-
-function refreshStatus() {
-    socket.emit('get_status');
-}
-
-function refreshTargets() {
-    socket.emit('refresh_targets');
-}
-
-function refreshFindings() {
-    socket.emit('get_findings', {});
-}
-
-function refreshChains() {
-    socket.emit('get_chains', {});
-}
-
-function refreshData() {
-    refreshAll();
 }
 
 // ============================================================
@@ -587,16 +548,11 @@ window.startQuickScan = startQuickScan;
 window.runFullScan = runFullScan;
 window.startScan = startScan;
 window.removeTarget = removeTarget;
-window.viewFinding = viewFinding;
-window.viewChain = viewChain;
+window.deleteFinding = deleteFinding;
+window.stopAllScans = stopAllScans;
 window.generateReport = generateReport;
 window.showToast = showToast;
 window.closeModal = closeModal;
-window.closeFindingDetail = closeFindingDetail;
-window.closeChainDetail = closeChainDetail;
 window.saveTarget = saveTarget;
-window.refreshTargets = refreshTargets;
-window.refreshFindings = refreshFindings;
-window.refreshChains = refreshChains;
 
 console.log('✅ Dashboard JS loaded');

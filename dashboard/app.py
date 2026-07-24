@@ -2,6 +2,7 @@
 BugBountyAgent - Dashboard Application
 =======================================
 Fully functional dashboard with real-time updates.
+ALL routes are defined here.
 """
 
 import os
@@ -42,29 +43,34 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logge
 
 _agent = None
 _tools = None
-_initialized = False
 
 def get_agent():
-    """Get the SINGLE agent instance (Singleton pattern)."""
     global _agent
     if _agent is None:
         print("🐞 Creating SINGLE agent instance...")
         config = get_config()
         _agent = BugBountyAgent(config)
         _agent._socketio = socketio
-        if hasattr(_agent, 'scanner') and hasattr(_agent.scanner, '_socketio'):
-            _agent.scanner._socketio = socketio
     return _agent
 
 def get_tools():
-    """Get the SINGLE tools instance."""
     global _tools
     if _tools is None:
         _tools = ToolManager(get_config())
     return _tools
 
+def emit_log(level, message):
+    try:
+        socketio.emit('log_message', {
+            'level': level,
+            'message': message,
+            'timestamp': get_timestamp()
+        })
+    except:
+        pass
+
 # ============================================================
-# Routes - Pages
+# Page Routes
 # ============================================================
 
 @app.route('/')
@@ -84,7 +90,7 @@ def chains_page():
     return render_template('chains.html')
 
 # ============================================================
-# API Routes
+# API Routes - Status
 # ============================================================
 
 @app.route('/api/status')
@@ -92,37 +98,48 @@ def api_status():
     try:
         agent = get_agent()
         status = agent.get_status()
-        return jsonify({'status': 'running', 'agent': status})
+        return jsonify({
+            'status': 'running',
+            'agent': status,
+            'timestamp': get_timestamp()
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/targets', methods=['GET'])
+# ============================================================
+# API Routes - Targets
+# ============================================================
+
+@app.route('/api/targets', methods=['GET', 'POST'])
 def api_targets():
-    try:
-        agent = get_agent()
-        targets = agent.list_targets()
-        return jsonify({'targets': targets})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/targets', methods=['POST'])
-def api_add_target():
-    try:
-        data = request.get_json()
-        url = data.get('url')
-        if not url:
-            return jsonify({'error': 'URL required'}), 400
-        agent = get_agent()
-        target_id = agent.add_target(url)
-        return jsonify({'success': True, 'target_id': target_id, 'url': url})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if request.method == 'GET':
+        try:
+            agent = get_agent()
+            targets = agent.list_targets()
+            return jsonify({'targets': targets})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            url = data.get('url')
+            if not url:
+                return jsonify({'error': 'URL required'}), 400
+            agent = get_agent()
+            target_id = agent.add_target(url)
+            emit_log('success', f'🎯 Target added: {url}')
+            return jsonify({'success': True, 'target_id': target_id, 'url': url})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/targets/<target_id>', methods=['DELETE'])
 def api_remove_target(target_id):
     try:
         agent = get_agent()
         success = agent.remove_target(target_id)
+        if success:
+            emit_log('info', f'🗑️ Target removed: {target_id}')
         return jsonify({'success': success})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -135,49 +152,124 @@ def api_start_scan(target_id):
         agent = get_agent()
         scan_id = agent.scan(target_id, scan_type)
         if scan_id:
+            emit_log('info', f'🚀 Scan started: {scan_id}')
             return jsonify({'success': True, 'scan_id': scan_id})
         return jsonify({'error': 'Failed to start scan'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# API Routes - Findings (ALL METHODS IN ONE PLACE)
+# ============================================================
 
 @app.route('/api/findings', methods=['GET'])
 def api_findings():
     try:
         agent = get_agent()
         findings = agent.get_findings()
-        return jsonify({'findings': findings, 'total': len(findings)})
+        formatted = []
+        for f in findings:
+            formatted.append({
+                'id': f.get('id', ''),
+                'title': f.get('title', 'Unknown'),
+                'severity': f.get('severity', 'info'),
+                'type': f.get('type', 'unknown'),
+                'description': f.get('description', ''),
+                'target': f.get('target', 'N/A'),
+                'cve_id': f.get('cve_id', ''),
+                'cvss_score': f.get('cvss_score', ''),
+                'remediation': f.get('remediation', ''),
+                'timestamp': f.get('timestamp', '')
+            })
+        return jsonify({'findings': formatted, 'total': len(formatted)})
     except Exception as e:
-        return jsonify({'error': str(e), 'findings': []}), 500
+        return jsonify({'error': str(e), 'findings': [], 'total': 0}), 500
 
-@app.route('/api/findings/<finding_id>', methods=['GET'])
-def api_get_finding(finding_id):
+@app.route('/api/findings/<finding_id>', methods=['DELETE'])
+def api_delete_finding(finding_id):
+    try:
+        print(f"🗑️ Deleting finding: {finding_id}")
+        agent = get_agent()
+        success = agent.delete_finding(finding_id)
+        if success:
+            emit_log('info', f'🗑️ Finding deleted: {finding_id}')
+            return jsonify({'success': True, 'finding_id': finding_id})
+        return jsonify({'error': 'Finding not found'}), 404
+    except Exception as e:
+        print(f"❌ Delete error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/findings/clear', methods=['POST'])
+def api_clear_findings():
     try:
         agent = get_agent()
-        finding = agent.get_finding(finding_id)
-        if finding:
-            return jsonify(finding)
-        return jsonify({'error': 'Not found'}), 404
+        success = agent.clear_findings()
+        if success:
+            emit_log('info', '🧹 All findings cleared')
+            return jsonify({'success': True})
+        return jsonify({'error': 'Failed to clear findings'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# API Routes - Chains
+# ============================================================
 
 @app.route('/api/chains', methods=['GET'])
 def api_chains():
     try:
         agent = get_agent()
         chains = agent.get_chains()
-        return jsonify({'chains': chains, 'total': len(chains)})
+        formatted = []
+        for c in chains:
+            formatted.append({
+                'id': c.get('id', ''),
+                'name': c.get('name', 'Unknown Chain'),
+                'target': c.get('target', 'N/A'),
+                'severity': c.get('severity', 'medium'),
+                'steps': len(c.get('steps', [])),
+                'findings': c.get('findings', []),
+                'completed': c.get('completed', False),
+                'timestamp': c.get('timestamp', '')
+            })
+        return jsonify({'chains': formatted, 'total': len(formatted)})
     except Exception as e:
-        return jsonify({'error': str(e), 'chains': []}), 500
+        return jsonify({'error': str(e), 'chains': [], 'total': 0}), 500
+
+# ============================================================
+# API Routes - Scans - Stop All
+# ============================================================
+
+@app.route('/api/scans/stop-all', methods=['POST'])
+def api_stop_all_scans():
+    try:
+        agent = get_agent()
+        stopped = 0
+        for scan_id in list(agent.running_scans.keys()):
+            if agent.stop_scan(scan_id):
+                stopped += 1
+        return jsonify({'success': True, 'stopped': stopped})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# API Routes - Tools
+# ============================================================
 
 @app.route('/api/tools', methods=['GET'])
 def api_tools():
     try:
         tools = get_tools()
         tool_status = tools.check_all_tools()
-        return jsonify({'tools': {
-            name: {'installed': info.installed, 'version': info.version}
-            for name, info in tool_status.items()
-        }})
+        return jsonify({
+            'tools': {
+                name: {
+                    'installed': info.installed,
+                    'version': info.version
+                }
+                for name, info in tool_status.items()
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
