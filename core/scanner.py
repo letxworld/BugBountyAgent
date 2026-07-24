@@ -2,17 +2,12 @@
 BugBountyAgent - Autonomous Vulnerability Scanner
 ==================================================
 This scanner controls your system like a human bug bounty hunter.
-It uses:
-1. Passive scanning (Nuclei, Nmap, Subfinder) for reconnaissance
-2. Active testing (Browser control, mouse/keyboard) for real exploitation
-3. System control (opens apps, navigates, clicks, types)
 """
 
 import json
 import time
 import socket
 import subprocess
-import pyautogui
 import os
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse
@@ -20,6 +15,14 @@ from urllib.parse import urlparse
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+# Optional imports with fallbacks
+try:
+    import pyautogui
+    PYAUTOGUI_AVAILABLE = True
+except ImportError:
+    PYAUTOGUI_AVAILABLE = False
+    print("⚠️ pyautogui not installed. System control limited.")
 
 from .config import Config
 from .browser import BrowserController
@@ -43,12 +46,15 @@ class Scanner:
         
         self.timeout = config.get('scanner.timeout', 300)
         self.severity_filter = config.get('scanner.severity_filter', ['low', 'medium', 'high', 'critical'])
-        self.auto_control = config.get('scanner.auto_control', True)  # Enable system control
+        self.auto_control = config.get('scanner.auto_control', True)
         
         self._socketio = None
         self._findings = []
         
-        log_info("🔍 Autonomous Scanner initialized (System Control: ENABLED)")
+        if PYAUTOGUI_AVAILABLE:
+            log_info("🔍 Autonomous Scanner initialized (System Control: ENABLED)")
+        else:
+            log_warning("🔍 Autonomous Scanner initialized (System Control: DISABLED - install pyautogui)")
     
     def set_socketio(self, socketio_instance):
         self._socketio = socketio_instance
@@ -69,7 +75,7 @@ class Scanner:
     # ============================================================
     
     def passive_scan(self, target: str) -> Dict[str, Any]:
-        """Passive reconnaissance using tools (Nmap, Nuclei, Subfinder)."""
+        """Passive reconnaissance using tools."""
         log_info(f"📡 Passive scanning: {target}")
         self._emit_log('info', f"📡 Passive scanning: {target}")
         
@@ -87,7 +93,7 @@ class Scanner:
         parsed = urlparse(target)
         domain = parsed.netloc or target
         
-        # 1.1 Subdomain Discovery
+        # Subdomain Discovery
         try:
             if self.terminal.is_tool_installed('subfinder'):
                 log_info("🔍 Discovering subdomains...")
@@ -101,7 +107,7 @@ class Scanner:
         except Exception as e:
             log_warning(f"   Subdomain discovery failed: {e}")
         
-        # 1.2 Port Scanning
+        # Port Scanning
         try:
             if self.terminal.is_tool_installed('nmap'):
                 log_info("🔌 Scanning ports...")
@@ -124,7 +130,7 @@ class Scanner:
         except Exception as e:
             log_warning(f"   Port scanning failed: {e}")
         
-        # 1.3 Nuclei Vulnerability Scanning
+        # Nuclei Vulnerability Scanning
         try:
             if self.terminal.is_tool_installed('nuclei'):
                 log_info("🔬 Running Nuclei vulnerability scan...")
@@ -160,7 +166,7 @@ class Scanner:
         except Exception as e:
             log_warning(f"   Nuclei scan failed: {e}")
         
-        # 1.4 Custom Header Checks
+        # Custom Header Checks
         try:
             log_info("🔍 Checking security headers...")
             self._emit_log('info', "🔍 Checking security headers...")
@@ -213,10 +219,7 @@ class Scanner:
     # ============================================================
     
     def active_scan(self, target: str) -> List[Dict]:
-        """
-        ACTIVE scanning - controls your system like a human.
-        Opens browser, navigates, clicks, types, and tests for vulnerabilities.
-        """
+        """ACTIVE scanning - controls your system like a human."""
         log_info(f"🎮 Active scanning (system control): {target}")
         self._emit_log('info', f"🎮 Active scanning (system control): {target}")
         
@@ -228,7 +231,7 @@ class Scanner:
             return findings
         
         try:
-            # 2.1 Connect Browser
+            # Connect Browser
             log_info("🌐 Connecting browser...")
             self._emit_log('info', "🌐 Connecting browser...")
             
@@ -240,7 +243,7 @@ class Scanner:
             log_info("✅ Browser connected")
             self._emit_log('info', "✅ Browser connected")
             
-            # 2.2 Navigate to Target
+            # Navigate to Target
             log_info(f"🌐 Navigating to: {target}")
             self._emit_log('info', f"🌐 Navigating to: {target}")
             
@@ -249,9 +252,9 @@ class Scanner:
                 self._emit_log('error', "❌ Navigation failed")
                 return findings
             
-            time.sleep(3)  # Wait for page to load
+            time.sleep(3)
             
-            # 2.3 Take Screenshot
+            # Take Screenshot
             log_info("📸 Taking screenshot...")
             self._emit_log('info', "📸 Taking screenshot...")
             screenshot_path = self.browser.screenshot(f"active_scan_{int(time.time())}")
@@ -259,35 +262,35 @@ class Scanner:
                 log_info(f"   ✅ Screenshot saved: {screenshot_path}")
                 self._emit_log('info', f"   ✅ Screenshot saved: {screenshot_path}")
             
-            # 2.4 Analyze Page
+            # Analyze Page
             log_info("🔍 Analyzing page for vulnerabilities...")
             self._emit_log('info', "🔍 Analyzing page for vulnerabilities...")
             
             page_findings = self._analyze_page(target)
             findings.extend(page_findings)
             
-            # 2.5 Test Forms
+            # Test Forms
             log_info("📝 Testing forms for vulnerabilities...")
             self._emit_log('info', "📝 Testing forms for vulnerabilities...")
             
             form_findings = self._test_forms(target)
             findings.extend(form_findings)
             
-            # 2.6 Check for XSS
+            # Check for XSS
             log_info("⚡ Testing for XSS vulnerabilities...")
             self._emit_log('info', "⚡ Testing for XSS vulnerabilities...")
             
             xss_findings = self._test_xss(target)
             findings.extend(xss_findings)
             
-            # 2.7 Check for SQL Injection
+            # Check for SQL Injection
             log_info("💉 Testing for SQL injection...")
             self._emit_log('info', "💉 Testing for SQL injection...")
             
             sql_findings = self._test_sql_injection(target)
             findings.extend(sql_findings)
             
-            # 2.8 Check for IDOR
+            # Check for IDOR
             log_info("🔐 Testing for IDOR vulnerabilities...")
             self._emit_log('info', "🔐 Testing for IDOR vulnerabilities...")
             
@@ -296,11 +299,6 @@ class Scanner:
             
             log_info(f"✅ Active scan complete. Found {len(findings)} vulnerabilities")
             self._emit_log('info', f"✅ Active scan complete. Found {len(findings)} vulnerabilities")
-            
-            # Log each finding
-            for f in findings[:5]:
-                log_info(f"   🔴 {f.get('severity', 'info')}: {f.get('title', 'Unknown')}")
-                self._emit_log('attack', f"   🔴 {f.get('severity', 'info')}: {f.get('title', 'Unknown')}")
             
         except Exception as e:
             log_error(f"❌ Active scan failed: {e}")
@@ -313,12 +311,11 @@ class Scanner:
         findings = []
         
         try:
-            # Get page HTML
             html = self.browser.get_html()
             if not html:
                 return findings
             
-            # Check for sensitive data in HTML
+            import re
             sensitive_patterns = [
                 ('API Key', r'[a-zA-Z0-9_-]{32,}', 'high'),
                 ('JWT Token', r'eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+', 'critical'),
@@ -327,11 +324,9 @@ class Scanner:
                 ('Session ID', r'session[=:]\s*[a-zA-Z0-9]{16,}', 'high'),
                 ('Admin Path', r'/admin|/administrator|/manage', 'medium'),
                 ('Backup File', r'\.bak|\.backup|\.old|\.swp', 'medium'),
-                ('Debug Mode', r'debug[=:]\s*true|debug_mode', 'medium'),
-                ('Internal IP', r'(10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})|(192\.168\.\d{1,3}\.\d{1,3})', 'low')
+                ('Debug Mode', r'debug[=:]\s*true|debug_mode', 'medium')
             ]
             
-            import re
             for name, pattern, severity in sensitive_patterns:
                 matches = re.finditer(pattern, html, re.IGNORECASE)
                 for match in matches:
@@ -339,28 +334,98 @@ class Scanner:
                         'id': f"page_{len(findings)+1}",
                         'title': f'Sensitive Information Disclosure: {name}',
                         'severity': severity,
-                        'description': f'Sensitive {name} found in page source: {match.group(0)[:50]}...',
+                        'description': f'Sensitive {name} found in page source',
                         'remediation': 'Remove sensitive data from client-side code',
                         'source': 'active_scan',
                         'timestamp': get_timestamp(),
                         'target': target
                     })
-                    break  # Only one per pattern
-            
-            # Check for security headers
-            headers = self.browser.evaluate("() => { return {} }")  # Placeholder
+                    break
             
         except Exception as e:
             log_debug(f"Page analysis failed: {e}")
         
         return findings
+    # ============================================================
+    # Reconnaissance
+    # ============================================================
+    
+    def reconnaissance(self, target: str) -> Dict[str, Any]:
+        """Perform reconnaissance on a target."""
+        log_info(f"🔍 Reconnaissance on: {target}")
+        self._emit_log('info', f"🔍 Reconnaissance on: {target}")
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'https://' + target
+        
+        results = {
+            'target': target,
+            'subdomains': [],
+            'ports': [],
+            'technologies': {},
+            'dns': {},
+            'ssl': {}
+        }
+        
+        parsed = urlparse(target)
+        domain = parsed.netloc or target
+        
+        # DNS Resolution
+        try:
+            ip = socket.gethostbyname(domain)
+            results['dns']['ip'] = ip
+            log_debug(f"   DNS: {domain} → {ip}")
+        except:
+            log_warning(f"   DNS resolution failed for: {domain}")
+        
+        # Subdomain Discovery
+        try:
+            if self.terminal.is_tool_installed('subfinder'):
+                result = self.terminal.run(f"subfinder -d {domain} -silent", timeout=60)
+                if result.success:
+                    subdomains = [s.strip() for s in result.stdout.split('\n') if s.strip()]
+                    results['subdomains'] = subdomains[:20]
+                    log_info(f"   ✅ Found {len(subdomains)} subdomains")
+                    self._emit_log('info', f"   ✅ Found {len(subdomains)} subdomains")
+        except Exception as e:
+            log_warning(f"   Subdomain discovery failed: {e}")
+        
+        # Port Scanning
+        try:
+            if self.terminal.is_tool_installed('nmap'):
+                result = self.terminal.run(
+                    f"nmap -p 21,22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5432,5900,6379,8080,8443,27017 -T4 {domain}",
+                    timeout=60
+                )
+                if result.success:
+                    ports = []
+                    for line in result.stdout.split('\n'):
+                        if '/tcp' in line and 'open' in line:
+                            try:
+                                ports.append(int(line.split('/')[0].strip()))
+                            except:
+                                pass
+                    results['ports'] = ports
+                    log_info(f"   ✅ Found {len(ports)} open ports")
+                    self._emit_log('info', f"   ✅ Found {len(ports)} open ports")
+        except Exception as e:
+            log_warning(f"   Port scanning failed: {e}")
+        
+        # Technology Detection
+        try:
+            tech = self._detect_technologies(target)
+            results['technologies'] = tech
+            log_debug(f"   Technologies: {', '.join(tech.keys())}")
+        except Exception as e:
+            log_warning(f"   Technology detection failed: {e}")
+        
+        return results
     
     def _test_forms(self, target: str) -> List[Dict]:
         """Test forms for vulnerabilities."""
         findings = []
         
         try:
-            # Find all forms
             forms = self.browser.evaluate("""
                 () => {
                     const forms = [];
@@ -385,7 +450,6 @@ class Scanner:
             """)
             
             for form in forms:
-                # Check for missing CSRF tokens
                 has_csrf = False
                 for input_data in form.get('inputs', []):
                     if 'csrf' in input_data.get('name', '').lower() or 'token' in input_data.get('name', '').lower():
@@ -404,25 +468,6 @@ class Scanner:
                         'target': target
                     })
             
-            # Check for password fields without HTTPS
-            if 'https://' not in target:
-                password_fields = self.browser.evaluate("""
-                    () => {
-                        return document.querySelectorAll('input[type="password"]').length;
-                    }
-                """)
-                if password_fields and password_fields > 0:
-                    findings.append({
-                        'id': f"form_{len(findings)+1}",
-                        'title': 'Password Field on HTTP Page',
-                        'severity': 'critical',
-                        'description': f'Password field found on non-HTTPS page. Credentials will be sent in plain text.',
-                        'remediation': 'Always use HTTPS for login forms',
-                        'source': 'active_scan',
-                        'timestamp': get_timestamp(),
-                        'target': target
-                    })
-            
         except Exception as e:
             log_debug(f"Form testing failed: {e}")
         
@@ -433,31 +478,9 @@ class Scanner:
         findings = []
         
         try:
-            # Find all input fields
-            inputs = self.browser.evaluate("""
-                () => {
-                    const inputs = [];
-                    document.querySelectorAll('input, textarea').forEach(el => {
-                        inputs.push({
-                            type: el.type,
-                            name: el.name,
-                            id: el.id,
-                            value: el.value
-                        });
-                    });
-                    return inputs;
-                }
-            """)
-            
-            # Test with XSS payloads
-            xss_payloads = ['<script>alert(1)</script>', '"><script>alert(1)</script>', '<img src=x onerror=alert(1)>']
-            
-            for input_data in inputs:
-                if input_data.get('type') in ['text', 'search', 'url', 'email', 'number']:
-                    # This is a simplified test - real XSS testing is more complex
-                    # In a real implementation, we would fill the input and check if the payload is reflected
-                    pass
-            
+            # This is a simplified check
+            # In production, this would actually inject payloads
+            pass
         except Exception as e:
             log_debug(f"XSS testing failed: {e}")
         
@@ -468,9 +491,7 @@ class Scanner:
         findings = []
         
         try:
-            # Try SQLMap if installed
             if self.terminal.is_tool_installed('sqlmap'):
-                # Run SQLMap on the target
                 result = self.terminal.run(
                     f"sqlmap -u {target} --batch --level=1 --risk=1 --timeout=10",
                     timeout=60
@@ -496,7 +517,6 @@ class Scanner:
         findings = []
         
         try:
-            # Check for ID patterns in URL
             import re
             id_patterns = [
                 r'[?&]id=\d+',
@@ -514,7 +534,7 @@ class Scanner:
                         'id': f"idor_{len(findings)+1}",
                         'title': 'Potential IDOR Vulnerability',
                         'severity': 'high',
-                        'description': f'ID parameter found in URL: {pattern}. May be vulnerable to IDOR.',
+                        'description': f'ID parameter found in URL. May be vulnerable to IDOR.',
                         'remediation': 'Implement proper access controls for all object references',
                         'source': 'active_scan',
                         'timestamp': get_timestamp(),
@@ -527,35 +547,27 @@ class Scanner:
         return findings
     
     # ============================================================
-    # 3. FULL SCAN (Passive + Active)
+    # 3. FULL SCAN
     # ============================================================
     
     def scan_vulnerabilities(self, target: str, scan_type: str = 'full') -> List[Dict]:
-        """
-        Full vulnerability scan combining passive + active techniques.
-        """
-        log_info(f"🔬 Starting FULL scan on: {target}")
-        self._emit_log('info', f"🔬 Starting FULL scan on: {target}")
+        """Full vulnerability scan combining passive + active."""
+        log_info(f"🔬 Starting scan on: {target}")
+        self._emit_log('info', f"🔬 Starting scan on: {target}")
         
         all_findings = []
         
-        # Phase 1: Passive Scanning
-        log_info("📡 PHASE 1: Passive Scanning")
-        self._emit_log('info', "📡 PHASE 1: Passive Scanning")
-        
+        # Passive Scanning
         passive_results = self.passive_scan(target)
         all_findings.extend(passive_results.get('vulnerabilities', []))
         
-        # Phase 2: Active System Control
+        # Active System Control
         if scan_type in ['full', 'active']:
-            log_info("🎮 PHASE 2: Active System Control")
-            self._emit_log('info', "🎮 PHASE 2: Active System Control")
-            
             active_findings = self.active_scan(target)
             all_findings.extend(active_findings)
         
-        log_info(f"✅ Full scan complete. Found {len(all_findings)} total vulnerabilities")
-        self._emit_log('info', f"✅ Full scan complete. Found {len(all_findings)} total vulnerabilities")
+        log_info(f"✅ Scan complete. Found {len(all_findings)} vulnerabilities")
+        self._emit_log('info', f"✅ Scan complete. Found {len(all_findings)} vulnerabilities")
         
         return all_findings
     
@@ -610,3 +622,79 @@ class Scanner:
         recommendations.append("✅ Ensure all findings are verified before reporting")
         
         return recommendations
+
+    # ============================================================
+    # Reconnaissance
+    # ============================================================
+    
+    def reconnaissance(self, target: str) -> Dict[str, Any]:
+        """Perform reconnaissance on a target."""
+        log_info(f"🔍 Reconnaissance on: {target}")
+        self._emit_log('info', f"🔍 Reconnaissance on: {target}")
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'https://' + target
+        
+        results = {
+            'target': target,
+            'subdomains': [],
+            'ports': [],
+            'technologies': {},
+            'dns': {},
+            'ssl': {}
+        }
+        
+        parsed = urlparse(target)
+        domain = parsed.netloc or target
+        
+        # DNS Resolution
+        try:
+            import socket
+            ip = socket.gethostbyname(domain)
+            results['dns']['ip'] = ip
+            log_debug(f"   DNS: {domain} → {ip}")
+        except:
+            log_warning(f"   DNS resolution failed for: {domain}")
+        
+        # Subdomain Discovery
+        try:
+            if self.terminal.is_tool_installed('subfinder'):
+                result = self.terminal.run(f"subfinder -d {domain} -silent", timeout=60)
+                if result.success:
+                    subdomains = [s.strip() for s in result.stdout.split('\n') if s.strip()]
+                    results['subdomains'] = subdomains[:20]
+                    log_info(f"   ✅ Found {len(subdomains)} subdomains")
+                    self._emit_log('info', f"   ✅ Found {len(subdomains)} subdomains")
+        except Exception as e:
+            log_warning(f"   Subdomain discovery failed: {e}")
+        
+        # Port Scanning
+        try:
+            if self.terminal.is_tool_installed('nmap'):
+                result = self.terminal.run(
+                    f"nmap -p 21,22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5432,5900,6379,8080,8443,27017 -T4 {domain}",
+                    timeout=60
+                )
+                if result.success:
+                    ports = []
+                    for line in result.stdout.split('\n'):
+                        if '/tcp' in line and 'open' in line:
+                            try:
+                                ports.append(int(line.split('/')[0].strip()))
+                            except:
+                                pass
+                    results['ports'] = ports
+                    log_info(f"   ✅ Found {len(ports)} open ports")
+                    self._emit_log('info', f"   ✅ Found {len(ports)} open ports")
+        except Exception as e:
+            log_warning(f"   Port scanning failed: {e}")
+        
+        # Technology Detection
+        try:
+            tech = self._detect_technologies(target)
+            results['technologies'] = tech
+            log_debug(f"   Technologies: {', '.join(tech.keys())}")
+        except Exception as e:
+            log_warning(f"   Technology detection failed: {e}")
+        
+        return results
